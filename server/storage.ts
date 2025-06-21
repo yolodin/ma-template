@@ -1,13 +1,16 @@
-import { User, InsertUser, Student, InsertStudent, Dojo, Class, InsertClass } from "../shared/schema.js";
+import { User, InsertUser, Student, InsertStudent, Dojo, Class, InsertClass, Attendance, InsertAttendance } from "../shared/schema.js";
 import * as bcrypt from "bcryptjs";
 
+// Feature 1-4: Storage interface for user, student, dojo, and class management
 export interface IStorage {
+  // Users (Features 1-2)
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getAllUsers(): Promise<User[]>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: number, user: Partial<InsertUser>): Promise<User | undefined>;
 
+  // Students (Feature 3)
   getStudent(id: number): Promise<Student | undefined>;
   getStudentsByParent(parentId: number): Promise<Student[]>;
   getStudentsByDojo(dojoId: number): Promise<Student[]>;
@@ -15,9 +18,11 @@ export interface IStorage {
   createStudent(student: InsertStudent): Promise<Student>;
   updateStudent(id: number, student: Partial<InsertStudent>): Promise<Student | undefined>;
 
+  // Dojos (Feature 3)
   getDojo(id: number): Promise<Dojo | undefined>;
   getAllDojos(): Promise<Dojo[]>;
 
+  // Classes (Feature 4)
   getClass(id: number): Promise<Class | undefined>;
   getClassesByInstructor(instructorId: number): Promise<Class[]>;
   getClassesByDojo(dojoId: number): Promise<Class[]>;
@@ -26,6 +31,17 @@ export interface IStorage {
   createClass(classData: InsertClass): Promise<Class>;
   updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined>;
   deleteClass(id: number): Promise<boolean>;
+
+  // Attendance (Feature 5)
+  getAttendance(id: number): Promise<Attendance | undefined>;
+  getAttendanceByStudent(studentId: number): Promise<Attendance[]>;
+  getAttendanceByClass(classId: number): Promise<Attendance[]>;
+  getAttendanceByDojo(dojoId: number): Promise<Attendance[]>;
+  getAttendanceByDateRange(startDate: Date, endDate: Date): Promise<Attendance[]>;
+  getAllAttendance(): Promise<Attendance[]>;
+  createAttendance(attendanceData: InsertAttendance): Promise<Attendance>;
+  checkDuplicateAttendance(studentId: number, classId: number, date: Date): Promise<boolean>;
+  processQRCodeCheckIn(qrCode: string, classId: number, checkedInBy?: number): Promise<Attendance>;
 }
 
 // In-memory storage implementation for Features 1-4
@@ -34,19 +50,15 @@ export class MemStorage implements IStorage {
   private students: Map<number, Student> = new Map();
   private dojos: Map<number, Dojo> = new Map();
   private classes: Map<number, Class> = new Map();
+  private attendance: Map<number, Attendance> = new Map();
   private currentUserId = 1;
   private currentStudentId = 1;
   private currentDojoId = 1;
   private currentClassId = 1;
+  private currentAttendanceId = 1;
 
-  private constructor() {
-    // Do not call seedData here; use the factory method
-  }
-
-  static async create(): Promise<MemStorage> {
-    const storage = new MemStorage();
-    await storage.seedData();
-    return storage;
+  constructor() {
+    this.seedData();
   }
 
   private async seedData() {
@@ -126,7 +138,41 @@ export class MemStorage implements IStorage {
     };
     this.classes.set(intermediateClass.id, intermediateClass);
 
-    console.log("Features 1-4 ready: Authentication + User Management + Student Management + Class Management");
+    // Create sample students for Feature 5 testing
+    const student1: Student = {
+      id: this.currentStudentId++,
+      firstName: "Alex",
+      lastName: "Johnson",
+      parentId: parent.id,
+      dojoId: dojo.id,
+      dateOfBirth: new Date("2010-05-15"),
+      beltLevel: "white",
+      emergencyContactName: "Jane Doe",
+      emergencyContactPhone: "555-0456",
+      medicalNotes: null,
+      qrCode: "DOJO:1:STUDENT:1",
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.students.set(student1.id, student1);
+
+    const student2: Student = {
+      id: this.currentStudentId++,
+      firstName: "Emma",
+      lastName: "Smith",
+      parentId: parent.id,
+      dojoId: dojo.id,
+      dateOfBirth: new Date("2012-08-22"),
+      beltLevel: "yellow",
+      emergencyContactName: "Jane Doe",
+      emergencyContactPhone: "555-0456",
+      medicalNotes: null,
+      qrCode: "DOJO:1:STUDENT:2",
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.students.set(student2.id, student2);
+
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -302,6 +348,114 @@ export class MemStorage implements IStorage {
 
   async deleteClass(id: number): Promise<boolean> {
     return this.classes.delete(id);
+  }
+
+  // Feature 5: Attendance Management Methods
+  async getAttendance(id: number): Promise<Attendance | undefined> {
+    return this.attendance.get(id);
+  }
+
+  async getAttendanceByStudent(studentId: number): Promise<Attendance[]> {
+    return Array.from(this.attendance.values()).filter(attendance => attendance.studentId === studentId);
+  }
+
+  async getAttendanceByClass(classId: number): Promise<Attendance[]> {
+    return Array.from(this.attendance.values()).filter(attendance => attendance.classId === classId);
+  }
+
+  async getAttendanceByDojo(dojoId: number): Promise<Attendance[]> {
+    return Array.from(this.attendance.values()).filter(attendance => attendance.dojoId === dojoId);
+  }
+
+  async getAttendanceByDateRange(startDate: Date, endDate: Date): Promise<Attendance[]> {
+    return Array.from(this.attendance.values()).filter(attendance => {
+      const checkInTime = new Date(attendance.checkInTime);
+      return checkInTime >= startDate && checkInTime <= endDate;
+    });
+  }
+
+  async getAllAttendance(): Promise<Attendance[]> {
+    return Array.from(this.attendance.values());
+  }
+
+  async createAttendance(insertAttendance: InsertAttendance): Promise<Attendance> {
+    const attendance: Attendance = {
+      id: this.currentAttendanceId++,
+      ...insertAttendance,
+      checkInTime: insertAttendance.checkInTime || new Date(),
+      notes: insertAttendance.notes || null,
+      checkedInBy: insertAttendance.checkedInBy || null,
+      createdAt: new Date()
+    };
+    this.attendance.set(attendance.id, attendance);
+    return attendance;
+  }
+
+  async checkDuplicateAttendance(studentId: number, classId: number, date: Date): Promise<boolean> {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const existingAttendance = Array.from(this.attendance.values()).find(attendance => 
+      attendance.studentId === studentId && 
+      attendance.classId === classId &&
+      attendance.checkInTime >= startOfDay &&
+      attendance.checkInTime <= endOfDay
+    );
+
+    return !!existingAttendance;
+  }
+
+  async processQRCodeCheckIn(qrCode: string, classId: number, checkedInBy?: number): Promise<Attendance> {
+    // Parse QR code format: DOJO:{dojoId}:STUDENT:{studentId}
+    const qrMatch = qrCode.match(/^DOJO:(\d+):STUDENT:(\d+)$/);
+    if (!qrMatch) {
+      throw new Error("Invalid QR code format");
+    }
+
+    const dojoId = parseInt(qrMatch[1]);
+    const studentId = parseInt(qrMatch[2]);
+
+    // Validate student exists
+    const student = await this.getStudent(studentId);
+    if (!student) {
+      throw new Error("Student not found");
+    }
+
+    // Validate class exists
+    const classInfo = await this.getClass(classId);
+    if (!classInfo) {
+      throw new Error("Class not found");
+    }
+
+    // Validate student belongs to the dojo
+    if (student.dojoId !== dojoId) {
+      throw new Error("Student does not belong to this dojo");
+    }
+
+    // Validate class is at the correct dojo
+    if (classInfo.dojoId !== dojoId) {
+      throw new Error("Class is not at the student's dojo");
+    }
+
+    // Check for duplicate attendance today
+    const today = new Date();
+    const isDuplicate = await this.checkDuplicateAttendance(studentId, classId, today);
+    if (isDuplicate) {
+      throw new Error("Student already checked in for this class today");
+    }
+
+    // Create attendance record
+    const attendanceData: InsertAttendance = {
+      studentId,
+      classId,
+      dojoId,
+      checkInMethod: "qr_code",
+      checkedInBy
+    };
+
+    return await this.createAttendance(attendanceData);
   }
 }
 

@@ -1,4 +1,4 @@
-import { pgTable, serial, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, boolean, timestamp, varchar } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -55,6 +55,19 @@ export const classes = pgTable("classes", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Feature 5: Attendance table for QR code check-in and manual attendance tracking
+export const attendance = pgTable("attendance", {
+  id: serial("id").primaryKey(),
+  studentId: integer("student_id").references(() => students.id).notNull(),
+  classId: integer("class_id").references(() => classes.id).notNull(),
+  dojoId: integer("dojo_id").references(() => dojos.id).notNull(),
+  checkInTime: timestamp("check_in_time").defaultNow().notNull(),
+  checkInMethod: varchar("check_in_method", { length: 20 }).default("qr_code").notNull(), // 'qr_code' or 'manual'
+  notes: text("notes"),
+  checkedInBy: integer("checked_in_by").references(() => users.id), // instructor who manually checked in (if manual)
+  createdAt: timestamp("created_at").defaultNow().notNull()
+});
+
 // Zod schemas for validation
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -82,6 +95,18 @@ export const insertClassSchema = createInsertSchema(classes).omit({
   endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Time must be in HH:MM format"),
 });
 
+export const insertAttendanceSchema = createInsertSchema(attendance).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  checkInMethod: z.enum(["qr_code", "manual"]).default("qr_code"),
+});
+
+export const qrCodeScanSchema = z.object({
+  qrCode: z.string().regex(/^DOJO:\d+:STUDENT:\d+$/, "Invalid QR code format"),
+  classId: z.number().int().positive("Class ID must be a positive integer"),
+});
+
 export const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
@@ -96,4 +121,7 @@ export type Dojo = typeof dojos.$inferSelect;
 export type InsertDojo = z.infer<typeof insertDojoSchema>;
 export type Class = typeof classes.$inferSelect;
 export type InsertClass = z.infer<typeof insertClassSchema>;
+export type Attendance = typeof attendance.$inferSelect;
+export type InsertAttendance = z.infer<typeof insertAttendanceSchema>;
+export type QRCodeScanData = z.infer<typeof qrCodeScanSchema>;
 export type LoginData = z.infer<typeof loginSchema>;
