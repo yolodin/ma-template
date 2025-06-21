@@ -92,6 +92,10 @@ temp/
 
 # Next.js build output
 .next
+client/.next
+
+# Next.js static export
+out/
 
 # Nuxt.js build / generate output
 .nuxt
@@ -115,3 +119,10 @@ test-results.xml
 
 # Local development
 .local
+
+# Client-specific patterns
+client/node_modules/
+client/.env*
+client/coverage/
+client/.next/
+client/out/
