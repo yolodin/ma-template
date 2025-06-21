@@ -51,6 +51,7 @@ export const insertDojoSchema = createInsertSchema(dojos).omit({
 
 export const insertStudentSchema = createInsertSchema(students).omit({
   id: true,
+  qrCode: true,
   createdAt: true,
 });
 

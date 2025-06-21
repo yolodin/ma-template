@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import type { Request, Response, NextFunction } from "express";
 import authRoutes from "./auth.js";
 import userRoutes from "./users.js";
+import apiRoutes from "./routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,6 +32,7 @@ app.use(session({
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api", apiRoutes);
 
 app.get("/api/health", (_req: Request, res: Response) => {
   res.json({ status: "ok", message: "YOLO Dojo API running" });

@@ -10,6 +10,7 @@ const router = Router();
 declare module "express-session" {
   interface SessionData {
     userId?: number;
+    userRole?: string;
   }
 }
 
@@ -24,6 +25,7 @@ router.post("/login", async (req: Request, res: Response) => {
     }
 
     req.session.userId = user.id;
+    req.session.userRole = user.role;
     res.json({ 
       message: "Login successful", 
       user: { ...user, password: undefined } 
