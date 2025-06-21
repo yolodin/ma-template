@@ -1,8 +1,9 @@
 import { Router, Request, Response } from "express";
 import { storage } from "./storage.js";
-import { insertUserSchema, insertStudentSchema, insertClassSchema } from "../shared/schema.js";
+import { insertUserSchema, insertStudentSchema, insertClassSchema, insertAttendanceSchema, qrCodeScanSchema } from "../shared/schema.js";
 import { requireAuth, requireRole } from "./middleware.js";
 
+// Extend session interface for Feature 3
 declare module "express-session" {
   interface SessionData {
     userId?: number;
@@ -78,6 +79,7 @@ router.put("/users/:id", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+// Feature 3: Student management routes
 router.get("/students", requireAuth, async (req: Request, res: Response) => {
   try {
     const userRole = req.session?.userRole;
@@ -167,6 +169,7 @@ router.put("/students/:id", requireRole(["instructor", "parent"]), async (req: R
   }
 });
 
+// Feature 3: Dojo routes
 router.get("/dojos", requireAuth, async (_req: Request, res: Response) => {
   try {
     const dojos = await storage.getAllDojos();
@@ -343,6 +346,198 @@ router.get("/dojos/:dojoId/classes", requireAuth, async (req: Request, res: Resp
   } catch (error) {
     console.error("Error fetching dojo classes:", error);
     res.status(500).json({ error: "Failed to fetch dojo classes" });
+  }
+});
+
+// Feature 5: Attendance Management Routes
+
+// GET /api/attendance - Get all attendance records (instructors only)
+router.get("/attendance", requireRole(["instructor"]), async (req: Request, res: Response) => {
+  try {
+    const attendance = await storage.getAllAttendance();
+    res.json(attendance);
+  } catch (error) {
+    console.error("Error fetching attendance:", error);
+    res.status(500).json({ error: "Failed to retrieve attendance records" });
+  }
+});
+
+// GET /api/attendance/:id - Get specific attendance record
+router.get("/attendance/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const id = parseInt(req.params.id);
+    if (isNaN(id)) {
+      return res.status(400).json({ error: "Invalid attendance ID" });
+    }
+
+    const attendance = await storage.getAttendance(id);
+    if (!attendance) {
+      return res.status(404).json({ error: "Attendance record not found" });
+    }
+
+    res.json(attendance);
+  } catch (error) {
+    console.error("Error fetching attendance:", error);
+    res.status(500).json({ error: "Failed to retrieve attendance record" });
+  }
+});
+
+// GET /api/students/:id/attendance - Get attendance records for a student
+router.get("/students/:id/attendance", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const studentId = parseInt(req.params.id);
+    if (isNaN(studentId)) {
+      return res.status(400).json({ error: "Invalid student ID" });
+    }
+
+    // Verify student exists
+    const student = await storage.getStudent(studentId);
+    if (!student) {
+      return res.status(404).json({ error: "Student not found" });
+    }
+
+    const attendance = await storage.getAttendanceByStudent(studentId);
+    res.json(attendance);
+  } catch (error) {
+    console.error("Error fetching student attendance:", error);
+    res.status(500).json({ error: "Failed to retrieve student attendance" });
+  }
+});
+
+// GET /api/classes/:id/attendance - Get attendance records for a class
+router.get("/classes/:id/attendance", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const classId = parseInt(req.params.id);
+    if (isNaN(classId)) {
+      return res.status(400).json({ error: "Invalid class ID" });
+    }
+
+    // Verify class exists
+    const classInfo = await storage.getClass(classId);
+    if (!classInfo) {
+      return res.status(404).json({ error: "Class not found" });
+    }
+
+    const attendance = await storage.getAttendanceByClass(classId);
+    res.json(attendance);
+  } catch (error) {
+    console.error("Error fetching class attendance:", error);
+    res.status(500).json({ error: "Failed to retrieve class attendance" });
+  }
+});
+
+// POST /api/attendance/qr-scan - QR code check-in
+router.post("/attendance/qr-scan", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const validatedData = qrCodeScanSchema.parse(req.body);
+    const { qrCode, classId } = validatedData;
+
+    const attendance = await storage.processQRCodeCheckIn(
+      qrCode, 
+      classId, 
+      req.session.userId
+    );
+
+    res.status(201).json({
+      message: "Check-in successful",
+      attendance
+    });
+  } catch (error: any) {
+    console.error("Error processing QR check-in:", error);
+    
+    if (error.message === "Invalid QR code format") {
+      return res.status(400).json({ error: "Invalid QR code format" });
+    }
+    if (error.message === "Student not found") {
+      return res.status(404).json({ error: "Student not found" });
+    }
+    if (error.message === "Class not found") {
+      return res.status(404).json({ error: "Class not found" });
+    }
+    if (error.message === "Student does not belong to this dojo") {
+      return res.status(400).json({ error: "Student does not belong to this dojo" });
+    }
+    if (error.message === "Class is not at the student's dojo") {
+      return res.status(400).json({ error: "Class is not at the student's dojo" });
+    }
+    if (error.message === "Student already checked in for this class today") {
+      return res.status(409).json({ error: "Student already checked in for this class today" });
+    }
+
+    res.status(500).json({ error: "Failed to process QR check-in" });
+  }
+});
+
+// POST /api/attendance/manual - Manual check-in (instructors only)
+router.post("/attendance/manual", requireRole(["instructor"]), async (req: Request, res: Response) => {
+  try {
+    const validatedData = insertAttendanceSchema.parse({
+      ...req.body,
+      checkInMethod: "manual",
+      checkedInBy: req.session.userId
+    });
+
+    // Verify student exists
+    const student = await storage.getStudent(validatedData.studentId);
+    if (!student) {
+      return res.status(404).json({ error: "Student not found" });
+    }
+
+    // Verify class exists
+    const classInfo = await storage.getClass(validatedData.classId);
+    if (!classInfo) {
+      return res.status(404).json({ error: "Class not found" });
+    }
+
+    // Check for duplicate attendance today
+    const today = new Date();
+    const isDuplicate = await storage.checkDuplicateAttendance(
+      validatedData.studentId, 
+      validatedData.classId, 
+      today
+    );
+    
+    if (isDuplicate) {
+      return res.status(409).json({ error: "Student already checked in for this class today" });
+    }
+
+    const attendance = await storage.createAttendance(validatedData);
+
+    res.status(201).json({
+      message: "Manual check-in successful",
+      attendance
+    });
+  } catch (error) {
+    console.error("Error processing manual check-in:", error);
+    res.status(500).json({ error: "Failed to process manual check-in" });
+  }
+});
+
+// GET /api/attendance/reports/date-range - Get attendance by date range (instructors only)
+router.get("/attendance/reports/date-range", requireRole(["instructor"]), async (req: Request, res: Response) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: "Start date and end date are required" });
+    }
+
+    const start = new Date(startDate as string);
+    const end = new Date(endDate as string);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return res.status(400).json({ error: "Invalid date format" });
+    }
+
+    if (start > end) {
+      return res.status(400).json({ error: "Start date must be before end date" });
+    }
+
+    const attendance = await storage.getAttendanceByDateRange(start, end);
+    res.json(attendance);
+  } catch (error) {
+    console.error("Error fetching attendance by date range:", error);
+    res.status(500).json({ error: "Failed to retrieve attendance report" });
   }
 });
 
