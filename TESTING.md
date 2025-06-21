@@ -48,7 +48,7 @@ The project contains these main test suites:
 - **Schema Tests** (`tests/schema.test.ts`) — Validates data schemas and validation rules
 - **Storage Tests** (`tests/storage.test.ts`) — Tests the in-memory storage system
 - **API Tests** (`tests/api.test.ts`) — Integration tests for API endpoints
-- **Test Runner** (`tests/test-runner.mjs`) — Manual API endpoint testing (run with `node tests/test-runner.mjs`)
+- **Test Runner** (`test-runner.mjs`) — Manual API endpoint testing (run with `node test-runner.mjs`)
 
 ---
 
@@ -112,7 +112,7 @@ npm run test:verbose
 ```bash
 npm run dev
 # In another terminal:
-node tests/test-runner.mjs
+node test-runner.mjs
 ```
 
 ---
@@ -362,4 +362,4 @@ npx jest tests/new-feature.test.ts
 
 - [Jest Documentation](https://jestjs.io/docs/getting-started)
 - [Supertest Documentation](https://github.com/visionmedia/supertest)
-- [TypeScript Testing](https://jestjs.io/docs/getting-started#using-typescript) 
+- [TypeScript Testing](https://jestjs.io/docs/getting-started#using-typescript)

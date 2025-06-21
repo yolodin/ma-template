@@ -1,4 +1,4 @@
-import { User, InsertUser, Student, InsertStudent, Dojo } from "../shared/schema.js";
+import { User, InsertUser, Student, InsertStudent, Dojo, Class, InsertClass } from "../shared/schema.js";
 import * as bcrypt from "bcryptjs";
 
 export interface IStorage {
@@ -17,19 +17,30 @@ export interface IStorage {
 
   getDojo(id: number): Promise<Dojo | undefined>;
   getAllDojos(): Promise<Dojo[]>;
+
+  getClass(id: number): Promise<Class | undefined>;
+  getClassesByInstructor(instructorId: number): Promise<Class[]>;
+  getClassesByDojo(dojoId: number): Promise<Class[]>;
+  getClassesByDay(dayOfWeek: string): Promise<Class[]>;
+  getAllClasses(): Promise<Class[]>;
+  createClass(classData: InsertClass): Promise<Class>;
+  updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined>;
+  deleteClass(id: number): Promise<boolean>;
 }
 
+// In-memory storage implementation for Features 1-4
 export class MemStorage implements IStorage {
   private users: Map<number, User> = new Map();
   private students: Map<number, Student> = new Map();
   private dojos: Map<number, Dojo> = new Map();
+  private classes: Map<number, Class> = new Map();
   private currentUserId = 1;
   private currentStudentId = 1;
   private currentDojoId = 1;
-  private initialized = false;
+  private currentClassId = 1;
 
-  constructor() {
-    // Don't call seedData in constructor - use static factory method instead
+  private constructor() {
+    // Do not call seedData here; use the factory method
   }
 
   static async create(): Promise<MemStorage> {
@@ -39,8 +50,7 @@ export class MemStorage implements IStorage {
   }
 
   private async seedData() {
-    if (this.initialized) return;
-    
+    // Create initial dojo for Feature 3
     const dojo: Dojo = {
       id: this.currentDojoId++,
       name: "YOLO Dojo",
@@ -66,7 +76,7 @@ export class MemStorage implements IStorage {
     };
     this.users.set(instructor.id, instructor);
 
-    // Create parent user for testing
+    // Create parent user for Feature 2-3 testing
     const parentPassword = await bcrypt.hash("parent123", 10);
     const parent: User = {
       id: this.currentUserId++,
@@ -81,7 +91,42 @@ export class MemStorage implements IStorage {
     };
     this.users.set(parent.id, parent);
 
-    this.initialized = true;
+    // Create sample classes for Feature 4
+    const beginnerClass: Class = {
+      id: this.currentClassId++,
+      name: "Beginner Taekwondo",
+      description: "Introduction to basic Taekwondo techniques and forms",
+      instructorId: instructor.id,
+      dojoId: dojo.id,
+      dayOfWeek: "monday",
+      startTime: "18:00",
+      endTime: "19:00",
+      maxCapacity: 15,
+      currentEnrollment: 0,
+      beltLevelRequired: "white",
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.classes.set(beginnerClass.id, beginnerClass);
+
+    const intermediateClass: Class = {
+      id: this.currentClassId++,
+      name: "Intermediate Taekwondo",
+      description: "Advanced techniques and sparring for colored belts",
+      instructorId: instructor.id,
+      dojoId: dojo.id,
+      dayOfWeek: "wednesday",
+      startTime: "19:00",
+      endTime: "20:30",
+      maxCapacity: 12,
+      currentEnrollment: 0,
+      beltLevelRequired: "yellow",
+      isActive: true,
+      createdAt: new Date(),
+    };
+    this.classes.set(intermediateClass.id, intermediateClass);
+
+    console.log("Features 1-4 ready: Authentication + User Management + Student Management + Class Management");
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -135,6 +180,7 @@ export class MemStorage implements IStorage {
     return updatedUser;
   }
 
+  // Student methods for Feature 3
   async getStudent(id: number): Promise<Student | undefined> {
     return this.students.get(id);
   }
@@ -190,6 +236,7 @@ export class MemStorage implements IStorage {
     return updatedStudent;
   }
 
+  // Dojo methods for Feature 3
   async getDojo(id: number): Promise<Dojo | undefined> {
     return this.dojos.get(id);
   }
@@ -197,72 +244,65 @@ export class MemStorage implements IStorage {
   async getAllDojos(): Promise<Dojo[]> {
     return Array.from(this.dojos.values());
   }
+
+  // Class methods for Feature 4
+  async getClass(id: number): Promise<Class | undefined> {
+    return this.classes.get(id);
+  }
+
+  async getClassesByInstructor(instructorId: number): Promise<Class[]> {
+    return Array.from(this.classes.values()).filter(cls => cls.instructorId === instructorId);
+  }
+
+  async getClassesByDojo(dojoId: number): Promise<Class[]> {
+    return Array.from(this.classes.values()).filter(cls => cls.dojoId === dojoId);
+  }
+
+  async getClassesByDay(dayOfWeek: string): Promise<Class[]> {
+    return Array.from(this.classes.values()).filter(cls => cls.dayOfWeek === dayOfWeek.toLowerCase());
+  }
+
+  async getAllClasses(): Promise<Class[]> {
+    return Array.from(this.classes.values());
+  }
+
+  async createClass(insertClass: InsertClass): Promise<Class> {
+    const newClass: Class = {
+      id: this.currentClassId++,
+      ...insertClass,
+      description: insertClass.description || null,
+      currentEnrollment: 0,
+      maxCapacity: insertClass.maxCapacity || 20,
+      beltLevelRequired: insertClass.beltLevelRequired || "white",
+      isActive: insertClass.isActive ?? true,
+      createdAt: new Date(),
+    };
+
+    this.classes.set(newClass.id, newClass);
+    return newClass;
+  }
+
+  async updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined> {
+    const existingClass = this.classes.get(id);
+    if (!existingClass) {
+      return undefined;
+    }
+
+    const updatedClass: Class = {
+      ...existingClass,
+      ...classData,
+      maxCapacity: classData.maxCapacity !== undefined ? classData.maxCapacity : existingClass.maxCapacity,
+      beltLevelRequired: classData.beltLevelRequired !== undefined ? classData.beltLevelRequired : existingClass.beltLevelRequired,
+      isActive: classData.isActive !== undefined ? classData.isActive : existingClass.isActive,
+    };
+
+    this.classes.set(id, updatedClass);
+    return updatedClass;
+  }
+
+  async deleteClass(id: number): Promise<boolean> {
+    return this.classes.delete(id);
+  }
 }
 
-// Create a singleton instance for the server
-let storageInstance: MemStorage | null = null;
-
-export async function getStorage(): Promise<MemStorage> {
-  if (!storageInstance) {
-    storageInstance = await MemStorage.create();
-  }
-  return storageInstance;
-}
-
-// For backward compatibility, create a default instance that will be initialized when first accessed
-let defaultStorage: MemStorage | null = null;
-
-export const storage = {
-  async getUser(id: number) {
-    if (!defaultStorage) defaultStorage = await MemStorage.create();
-    return defaultStorage.getUser(id);
-  },
-  async getUserByUsername(username: string) {
-    if (!defaultStorage) defaultStorage = await MemStorage.create();
-    return defaultStorage.getUserByUsername(username);
-  },
-  async getAllUsers() {
-    if (!defaultStorage) defaultStorage = await MemStorage.create();
-    return defaultStorage.getAllUsers();
-  },
-  async createUser(user: InsertUser) {
-    if (!defaultStorage) defaultStorage = await MemStorage.create();
-    return defaultStorage.createUser(user);
-  },
-  async updateUser(id: number, user: Partial<InsertUser>) {
-    if (!defaultStorage) defaultStorage = await MemStorage.create();
-    return defaultStorage.updateUser(id, user);
-  },
-  async getStudent(id: number) {
-    if (!defaultStorage) defaultStorage = await MemStorage.create();
-    return defaultStorage.getStudent(id);
-  },
-  async getStudentsByParent(parentId: number) {
-    if (!defaultStorage) defaultStorage = await MemStorage.create();
-    return defaultStorage.getStudentsByParent(parentId);
-  },
-  async getStudentsByDojo(dojoId: number) {
-    if (!defaultStorage) defaultStorage = await MemStorage.create();
-    return defaultStorage.getStudentsByDojo(dojoId);
-  },
-  async getAllStudents() {
-    if (!defaultStorage) defaultStorage = await MemStorage.create();
-    return defaultStorage.getAllStudents();
-  },
-  async createStudent(student: InsertStudent) {
-    if (!defaultStorage) defaultStorage = await MemStorage.create();
-    return defaultStorage.createStudent(student);
-  },
-  async updateStudent(id: number, student: Partial<InsertStudent>) {
-    if (!defaultStorage) defaultStorage = await MemStorage.create();
-    return defaultStorage.updateStudent(id, student);
-  },
-  async getDojo(id: number) {
-    if (!defaultStorage) defaultStorage = await MemStorage.create();
-    return defaultStorage.getDojo(id);
-  },
-  async getAllDojos() {
-    if (!defaultStorage) defaultStorage = await MemStorage.create();
-    return defaultStorage.getAllDojos();
-  }
-};
+export const storage = new MemStorage();
