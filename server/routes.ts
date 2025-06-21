@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { storage } from "./storage.js";
-import { insertUserSchema, insertStudentSchema } from "../shared/schema.js";
+import { insertUserSchema, insertStudentSchema, insertClassSchema } from "../shared/schema.js";
 import { requireAuth, requireRole } from "./middleware.js";
 
 declare module "express-session" {
@@ -12,6 +12,7 @@ declare module "express-session" {
 
 const router = Router();
 
+// Feature 2: User management routes
 router.get("/users", requireRole(["instructor"]), async (_req: Request, res: Response) => {
   try {
     const users = await storage.getAllUsers();
@@ -189,6 +190,159 @@ router.get("/dojos/:id", requireAuth, async (req: Request, res: Response) => {
   } catch (error) {
     console.error("Error fetching dojo:", error);
     res.status(500).json({ error: "Failed to fetch dojo" });
+  }
+});
+
+// Feature 4: Class management routes
+router.get("/classes", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userRole = req.session?.userRole;
+    const userId = req.session?.userId;
+
+    if (userRole === "instructor") {
+      // Instructors can see all classes or filter by their own
+      const instructorId = req.query.instructor;
+      if (instructorId && parseInt(instructorId as string) === userId) {
+        const classes = await storage.getClassesByInstructor(userId);
+        res.json(classes);
+      } else {
+        const classes = await storage.getAllClasses();
+        res.json(classes);
+      }
+    } else {
+      // Parents and students can see all available classes
+      const classes = await storage.getAllClasses();
+      res.json(classes);
+    }
+  } catch (error) {
+    console.error("Error fetching classes:", error);
+    res.status(500).json({ error: "Failed to fetch classes" });
+  }
+});
+
+router.get("/classes/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const classId = parseInt(req.params.id);
+    const classData = await storage.getClass(classId);
+    
+    if (!classData) {
+      return res.status(404).json({ error: "Class not found" });
+    }
+
+    res.json(classData);
+  } catch (error) {
+    console.error("Error fetching class:", error);
+    res.status(500).json({ error: "Failed to fetch class" });
+  }
+});
+
+router.post("/classes", requireRole(["instructor"]), async (req: Request, res: Response) => {
+  try {
+    const classData = insertClassSchema.parse(req.body);
+    
+    // Validate that the instructor exists and is actually an instructor
+    const instructor = await storage.getUser(classData.instructorId);
+    if (!instructor || instructor.role !== "instructor") {
+      return res.status(400).json({ error: "Invalid instructor ID" });
+    }
+
+    // Validate that the dojo exists
+    const dojo = await storage.getDojo(classData.dojoId);
+    if (!dojo) {
+      return res.status(400).json({ error: "Invalid dojo ID" });
+    }
+
+    const newClass = await storage.createClass(classData);
+    res.status(201).json(newClass);
+  } catch (error) {
+    console.error("Error creating class:", error);
+    res.status(400).json({ error: "Invalid class data" });
+  }
+});
+
+router.put("/classes/:id", requireRole(["instructor"]), async (req: Request, res: Response) => {
+  try {
+    const classId = parseInt(req.params.id);
+    const existingClass = await storage.getClass(classId);
+    
+    if (!existingClass) {
+      return res.status(404).json({ error: "Class not found" });
+    }
+
+    // Only the assigned instructor can update their class
+    if (req.session?.userId !== existingClass.instructorId) {
+      return res.status(403).json({ error: "Access denied - not your class" });
+    }
+
+    const classData = insertClassSchema.partial().parse(req.body);
+    const updatedClass = await storage.updateClass(classId, classData);
+    
+    res.json(updatedClass);
+  } catch (error) {
+    console.error("Error updating class:", error);
+    res.status(400).json({ error: "Invalid class data" });
+  }
+});
+
+router.delete("/classes/:id", requireRole(["instructor"]), async (req: Request, res: Response) => {
+  try {
+    const classId = parseInt(req.params.id);
+    const existingClass = await storage.getClass(classId);
+    
+    if (!existingClass) {
+      return res.status(404).json({ error: "Class not found" });
+    }
+
+    // Only the assigned instructor can delete their class
+    if (req.session?.userId !== existingClass.instructorId) {
+      return res.status(403).json({ error: "Access denied - not your class" });
+    }
+
+    const deleted = await storage.deleteClass(classId);
+    if (deleted) {
+      res.json({ message: "Class deleted successfully" });
+    } else {
+      res.status(500).json({ error: "Failed to delete class" });
+    }
+  } catch (error) {
+    console.error("Error deleting class:", error);
+    res.status(500).json({ error: "Failed to delete class" });
+  }
+});
+
+// Get classes by day of week
+router.get("/classes/schedule/:day", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const dayOfWeek = req.params.day.toLowerCase();
+    const validDays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
+    
+    if (!validDays.includes(dayOfWeek)) {
+      return res.status(400).json({ error: "Invalid day of week" });
+    }
+
+    const classes = await storage.getClassesByDay(dayOfWeek);
+    res.json(classes);
+  } catch (error) {
+    console.error("Error fetching classes by day:", error);
+    res.status(500).json({ error: "Failed to fetch classes" });
+  }
+});
+
+// Get classes by dojo
+router.get("/dojos/:dojoId/classes", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const dojoId = parseInt(req.params.dojoId);
+    const dojo = await storage.getDojo(dojoId);
+    
+    if (!dojo) {
+      return res.status(404).json({ error: "Dojo not found" });
+    }
+
+    const classes = await storage.getClassesByDojo(dojoId);
+    res.json(classes);
+  } catch (error) {
+    console.error("Error fetching dojo classes:", error);
+    res.status(500).json({ error: "Failed to fetch dojo classes" });
   }
 });
 
