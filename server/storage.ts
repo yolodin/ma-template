@@ -1,5 +1,5 @@
 import { User, InsertUser, Student, InsertStudent, Dojo } from "../shared/schema.js";
-import bcrypt from "bcryptjs";
+import * as bcrypt from "bcryptjs";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -26,12 +26,21 @@ export class MemStorage implements IStorage {
   private currentUserId = 1;
   private currentStudentId = 1;
   private currentDojoId = 1;
+  private initialized = false;
 
   constructor() {
-    this.seedData();
+    // Don't call seedData in constructor - use static factory method instead
+  }
+
+  static async create(): Promise<MemStorage> {
+    const storage = new MemStorage();
+    await storage.seedData();
+    return storage;
   }
 
   private async seedData() {
+    if (this.initialized) return;
+    
     const dojo: Dojo = {
       id: this.currentDojoId++,
       name: "YOLO Dojo",
@@ -72,6 +81,7 @@ export class MemStorage implements IStorage {
     };
     this.users.set(parent.id, parent);
 
+    this.initialized = true;
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -189,4 +199,70 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+// Create a singleton instance for the server
+let storageInstance: MemStorage | null = null;
+
+export async function getStorage(): Promise<MemStorage> {
+  if (!storageInstance) {
+    storageInstance = await MemStorage.create();
+  }
+  return storageInstance;
+}
+
+// For backward compatibility, create a default instance that will be initialized when first accessed
+let defaultStorage: MemStorage | null = null;
+
+export const storage = {
+  async getUser(id: number) {
+    if (!defaultStorage) defaultStorage = await MemStorage.create();
+    return defaultStorage.getUser(id);
+  },
+  async getUserByUsername(username: string) {
+    if (!defaultStorage) defaultStorage = await MemStorage.create();
+    return defaultStorage.getUserByUsername(username);
+  },
+  async getAllUsers() {
+    if (!defaultStorage) defaultStorage = await MemStorage.create();
+    return defaultStorage.getAllUsers();
+  },
+  async createUser(user: InsertUser) {
+    if (!defaultStorage) defaultStorage = await MemStorage.create();
+    return defaultStorage.createUser(user);
+  },
+  async updateUser(id: number, user: Partial<InsertUser>) {
+    if (!defaultStorage) defaultStorage = await MemStorage.create();
+    return defaultStorage.updateUser(id, user);
+  },
+  async getStudent(id: number) {
+    if (!defaultStorage) defaultStorage = await MemStorage.create();
+    return defaultStorage.getStudent(id);
+  },
+  async getStudentsByParent(parentId: number) {
+    if (!defaultStorage) defaultStorage = await MemStorage.create();
+    return defaultStorage.getStudentsByParent(parentId);
+  },
+  async getStudentsByDojo(dojoId: number) {
+    if (!defaultStorage) defaultStorage = await MemStorage.create();
+    return defaultStorage.getStudentsByDojo(dojoId);
+  },
+  async getAllStudents() {
+    if (!defaultStorage) defaultStorage = await MemStorage.create();
+    return defaultStorage.getAllStudents();
+  },
+  async createStudent(student: InsertStudent) {
+    if (!defaultStorage) defaultStorage = await MemStorage.create();
+    return defaultStorage.createStudent(student);
+  },
+  async updateStudent(id: number, student: Partial<InsertStudent>) {
+    if (!defaultStorage) defaultStorage = await MemStorage.create();
+    return defaultStorage.updateStudent(id, student);
+  },
+  async getDojo(id: number) {
+    if (!defaultStorage) defaultStorage = await MemStorage.create();
+    return defaultStorage.getDojo(id);
+  },
+  async getAllDojos() {
+    if (!defaultStorage) defaultStorage = await MemStorage.create();
+    return defaultStorage.getAllDojos();
+  }
+};
