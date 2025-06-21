@@ -51,7 +51,7 @@ app.get("/", (_req: Request, res: Response) => {
       </style>
     </head>
     <body>
-      <h1>🥋 YOLO Dojo Management System</h1>
+      <h1>YOLO Dojo Management System</h1>
 
       <h2>Available API Endpoints:</h2>
       <div class="endpoint"><strong>POST /api/auth/login</strong> - User login</div>
