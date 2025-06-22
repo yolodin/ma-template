@@ -15,7 +15,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<User>;
   logout: () => void;
   fetchUser: () => Promise<void>;
 }
@@ -45,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Set user data from session response
       setUser(data.user);
+      return data.user;
     } catch (error) {
       console.error('Login error:', error);
       throw error;

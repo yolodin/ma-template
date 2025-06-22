@@ -1,6 +1,6 @@
 import { Builder, By, until } from 'selenium-webdriver';
 
-const BASE_URL = 'http://localhost:3001'; // Next.js is running on 3001
+const BASE_URL = 'http://localhost:3000'; // Next.js is running on 3000
 const LOGIN_URL = `${BASE_URL}/login`;
 
 const users = [
@@ -45,9 +45,14 @@ async function testUserNavigation(user) {
     await driver.findElement(By.css('button[type="submit"]')).click();
     await sleep(2000);
     
-    // Wait for redirect and verify we're on dashboard
-    await driver.wait(until.urlContains('/dashboard'), 5000);
-    console.log(`✅ ${user.role} login successful`);
+    // Wait for redirect and verify we're on dashboard (or classes for students/parents)
+    if (user.role === 'student' || user.role === 'parent') {
+      await driver.wait(until.urlContains('/classes'), 5000);
+      console.log(`✅ ${user.role} login successful, redirected to classes`);
+    } else {
+      await driver.wait(until.urlContains('/dashboard'), 5000);
+      console.log(`✅ ${user.role} login successful`);
+    }
     
     // Check if sidebar is visible
     const sidebar = await driver.findElement(By.css('[class*="lg:w-64"]'));
@@ -96,7 +101,7 @@ async function testUserNavigation(user) {
         // Click on menu item
         const menuLink = await driver.findElement(By.xpath(`//span[text()="${menuItem}"]`));
         await menuLink.click();
-        await sleep(1500);
+        await sleep(2000); // Add wait to avoid stale element reference
         
         // Verify URL change
         const currentUrl = await driver.getCurrentUrl();

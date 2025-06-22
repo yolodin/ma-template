@@ -74,7 +74,7 @@ export class MemStorage implements IStorage {
     this.dojos.set(dojo.id, dojo);
 
     // Create initial instructor for testing
-    const hashedPassword = await bcrypt.hash("password123", 10);
+    const hashedPassword = await bcrypt.hash("password12377", 10);
     const instructor: User = {
       id: this.currentUserId++,
       username: "instructor",
@@ -89,7 +89,7 @@ export class MemStorage implements IStorage {
     this.users.set(instructor.id, instructor);
 
     // Create parent user for Feature 2-3 testing
-    const parentPassword = await bcrypt.hash("parent123", 10);
+    const parentPassword = await bcrypt.hash("parent12377", 10);
     const parent: User = {
       id: this.currentUserId++,
       username: "parent",
@@ -102,6 +102,21 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
     };
     this.users.set(parent.id, parent);
+
+    // Create student user for testing
+    const studentPassword = await bcrypt.hash("student12377", 10);
+    const student: User = {
+      id: this.currentUserId++,
+      username: "student1",
+      email: "student1@yolodojo.com",
+      password: studentPassword,
+      role: "student",
+      firstName: "Alex",
+      lastName: "Smith",
+      phone: "555-0789",
+      createdAt: new Date(),
+    };
+    this.users.set(student.id, student);
 
     // Create sample classes for Feature 4
     const beginnerClass: Class = {
@@ -141,15 +156,11 @@ export class MemStorage implements IStorage {
     // Create sample students for Feature 5 testing
     const student1: Student = {
       id: this.currentStudentId++,
-      firstName: "Alex",
-      lastName: "Johnson",
+      userId: null,
       parentId: parent.id,
       dojoId: dojo.id,
-      dateOfBirth: new Date("2010-05-15"),
       beltLevel: "white",
-      emergencyContactName: "Jane Doe",
-      emergencyContactPhone: "555-0456",
-      medicalNotes: null,
+      age: 13,
       qrCode: "DOJO:1:STUDENT:1",
       isActive: true,
       createdAt: new Date(),
@@ -158,15 +169,11 @@ export class MemStorage implements IStorage {
 
     const student2: Student = {
       id: this.currentStudentId++,
-      firstName: "Emma",
-      lastName: "Smith",
+      userId: null,
       parentId: parent.id,
       dojoId: dojo.id,
-      dateOfBirth: new Date("2012-08-22"),
       beltLevel: "yellow",
-      emergencyContactName: "Jane Doe",
-      emergencyContactPhone: "555-0456",
-      medicalNotes: null,
+      age: 11,
       qrCode: "DOJO:1:STUDENT:2",
       isActive: true,
       createdAt: new Date(),
