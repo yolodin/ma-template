@@ -19,8 +19,15 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await login(username, password);
-      router.push('/dashboard');
+      const user = await login(username, password);
+      
+      // Role-based redirects
+      if (user?.role === 'instructor') {
+        router.push('/dashboard');
+      } else {
+        // Parent and student users go to classes page
+        router.push('/classes');
+      }
     } catch (err) {
       setError('Invalid username or password');
     } finally {
