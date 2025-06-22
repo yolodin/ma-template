@@ -55,6 +55,17 @@ export const classes = pgTable("classes", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Bookings table for class enrollment
+export const bookings = pgTable("bookings", {
+  id: serial("id").primaryKey(),
+  studentId: integer("student_id").references(() => students.id).notNull(),
+  classId: integer("class_id").references(() => classes.id).notNull(),
+  bookedBy: integer("booked_by").references(() => users.id).notNull(), // parent or student who made the booking
+  bookedAt: timestamp("booked_at").defaultNow().notNull(),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Feature 5: Attendance table for QR code check-in and manual attendance tracking
 export const attendance = pgTable("attendance", {
   id: serial("id").primaryKey(),
@@ -95,11 +106,26 @@ export const insertClassSchema = createInsertSchema(classes).omit({
   endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Time must be in HH:MM format"),
 });
 
+export const updateClassSchema = createInsertSchema(classes).omit({
+  id: true,
+  createdAt: true,
+}).partial().extend({
+  dayOfWeek: z.enum(["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]).optional(),
+  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Time must be in HH:MM format").optional(),
+  endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, "Time must be in HH:MM format").optional(),
+});
+
 export const insertAttendanceSchema = createInsertSchema(attendance).omit({
   id: true,
   createdAt: true,
 }).extend({
   checkInMethod: z.enum(["qr_code", "manual"]).default("qr_code"),
+});
+
+export const insertBookingSchema = createInsertSchema(bookings).omit({
+  id: true,
+  bookedAt: true,
+  createdAt: true,
 });
 
 export const qrCodeScanSchema = z.object({
@@ -121,6 +147,9 @@ export type Dojo = typeof dojos.$inferSelect;
 export type InsertDojo = z.infer<typeof insertDojoSchema>;
 export type Class = typeof classes.$inferSelect;
 export type InsertClass = z.infer<typeof insertClassSchema>;
+export type UpdateClass = z.infer<typeof updateClassSchema>;
+export type Booking = typeof bookings.$inferSelect;
+export type InsertBooking = z.infer<typeof insertBookingSchema>;
 export type Attendance = typeof attendance.$inferSelect;
 export type InsertAttendance = z.infer<typeof insertAttendanceSchema>;
 export type QRCodeScanData = z.infer<typeof qrCodeScanSchema>;

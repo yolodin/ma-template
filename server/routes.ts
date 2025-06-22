@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { storage } from "./storage.js";
-import { insertUserSchema, insertStudentSchema, insertClassSchema, insertAttendanceSchema, qrCodeScanSchema } from "../shared/schema.js";
+import { insertUserSchema, insertStudentSchema, insertClassSchema, updateClassSchema, insertAttendanceSchema, qrCodeScanSchema } from "../shared/schema.js";
 import { requireAuth, requireRole } from "./middleware.js";
 
 // Extend session interface for Feature 3
@@ -277,7 +277,7 @@ router.put("/classes/:id", requireRole(["instructor"]), async (req: Request, res
       return res.status(403).json({ error: "Access denied - not your class" });
     }
 
-    const classData = insertClassSchema.partial().parse(req.body);
+    const classData = updateClassSchema.parse(req.body);
     const updatedClass = await storage.updateClass(classId, classData);
     
     res.json(updatedClass);
@@ -538,6 +538,176 @@ router.get("/attendance/reports/date-range", requireRole(["instructor"]), async 
   } catch (error) {
     console.error("Error fetching attendance by date range:", error);
     res.status(500).json({ error: "Failed to retrieve attendance report" });
+  }
+});
+
+// Feature 6: Booking Management Routes
+
+// POST /api/classes/book/:id - Book a class for a student
+router.post("/classes/book/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const classId = parseInt(req.params.id);
+    const { studentId } = req.body;
+    const userId = req.session?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    if (!studentId) {
+      return res.status(400).json({ error: "Student ID is required" });
+    }
+
+    // Validate class exists
+    const classInfo = await storage.getClass(classId);
+    if (!classInfo) {
+      return res.status(404).json({ error: "Class not found" });
+    }
+
+    // Validate student exists
+    const student = await storage.getStudent(studentId);
+    if (!student) {
+      return res.status(404).json({ error: "Student not found" });
+    }
+
+    // Check if user has permission to book for this student
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    // Students can only book for themselves, parents can book for their children
+    if (user.role === "student") {
+      if (student.userId !== userId) {
+        return res.status(403).json({ error: "Students can only book for themselves" });
+      }
+    } else if (user.role === "parent") {
+      if (student.parentId !== userId) {
+        return res.status(403).json({ error: "Parents can only book for their children" });
+      }
+    } else {
+      return res.status(403).json({ error: "Only students and parents can book classes" });
+    }
+
+    // Check if student is already booked
+    const isBooked = await storage.isStudentBooked(studentId, classId);
+    if (isBooked) {
+      return res.status(409).json({ error: "Student is already booked for this class" });
+    }
+
+    // Check if class is full
+    if (classInfo.currentEnrollment >= classInfo.maxCapacity) {
+      return res.status(409).json({ error: "Class is full" });
+    }
+
+    // Create booking
+    const booking = await storage.createBooking({
+      studentId,
+      classId,
+      bookedBy: userId
+    });
+
+    // Update class enrollment
+    await storage.updateClass(classId, {
+      currentEnrollment: classInfo.currentEnrollment + 1
+    });
+
+    res.status(201).json({
+      message: "Class booked successfully",
+      booking
+    });
+  } catch (error) {
+    console.error("Error booking class:", error);
+    res.status(500).json({ error: "Failed to book class" });
+  }
+});
+
+// DELETE /api/classes/book/:id - Cancel a class booking
+router.delete("/classes/book/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const classId = parseInt(req.params.id);
+    const { studentId } = req.body;
+    const userId = req.session?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: "User not authenticated" });
+    }
+
+    if (!studentId) {
+      return res.status(400).json({ error: "Student ID is required" });
+    }
+
+    // Validate class exists
+    const classInfo = await storage.getClass(classId);
+    if (!classInfo) {
+      return res.status(404).json({ error: "Class not found" });
+    }
+
+    // Validate student exists
+    const student = await storage.getStudent(studentId);
+    if (!student) {
+      return res.status(404).json({ error: "Student not found" });
+    }
+
+    // Check if user has permission to cancel booking for this student
+    const user = await storage.getUser(userId);
+    if (!user) {
+      return res.status(401).json({ error: "User not found" });
+    }
+
+    // Students can only cancel their own bookings, parents can cancel for their children
+    if (user.role === "student") {
+      if (student.userId !== userId) {
+        return res.status(403).json({ error: "Students can only cancel their own bookings" });
+      }
+    } else if (user.role === "parent") {
+      if (student.parentId !== userId) {
+        return res.status(403).json({ error: "Parents can only cancel bookings for their children" });
+      }
+    } else {
+      return res.status(403).json({ error: "Only students and parents can cancel bookings" });
+    }
+
+    // Find and delete the booking
+    const bookings = await storage.getBookingsByStudent(studentId);
+    const booking = bookings.find(b => b.classId === classId);
+    
+    if (!booking) {
+      return res.status(404).json({ error: "Booking not found" });
+    }
+
+    await storage.deleteBooking(booking.id);
+
+    // Update class enrollment
+    await storage.updateClass(classId, {
+      currentEnrollment: Math.max(0, classInfo.currentEnrollment - 1)
+    });
+
+    res.json({
+      message: "Booking cancelled successfully"
+    });
+  } catch (error) {
+    console.error("Error cancelling booking:", error);
+    res.status(500).json({ error: "Failed to cancel booking" });
+  }
+});
+
+// GET /api/classes/:id/bookings - Get bookings for a class (instructors only)
+router.get("/classes/:id/bookings", requireRole(["instructor"]), async (req: Request, res: Response) => {
+  try {
+    const classId = parseInt(req.params.id);
+
+    // Validate class exists
+    const classInfo = await storage.getClass(classId);
+    if (!classInfo) {
+      return res.status(404).json({ error: "Class not found" });
+    }
+
+    const bookings = await storage.getBookingsByClass(classId);
+    res.json(bookings);
+  } catch (error) {
+    console.error("Error fetching class bookings:", error);
+    res.status(500).json({ error: "Failed to fetch class bookings" });
   }
 });
 

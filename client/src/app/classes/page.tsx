@@ -1,14 +1,553 @@
-import { ProtectedRoute } from '@/components/protected-route';
+"use client"
+
+import { useState } from "react"
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { useAuth } from "@/contexts/auth-context"
+import { useToast } from "@/components/toast-provider"
+import { Plus, Calendar, Clock, Users, BookOpen, BookX } from "lucide-react"
+import { ProtectedRoute } from '@/components/protected-route'
+
+interface Class {
+  id: number
+  name: string
+  description: string | null
+  instructorId: number
+  dojoId: number
+  dayOfWeek: string
+  startTime: string
+  endTime: string
+  maxCapacity: number
+  currentEnrollment: number
+  beltLevelRequired: string
+  isActive: boolean
+  createdAt: string
+}
+
+interface Student {
+  id: number
+  userId: number | null
+  parentId: number | null
+  dojoId: number
+  beltLevel: string
+  age: number | null
+  qrCode: string
+  isActive: boolean
+  createdAt: string
+}
+
+interface NewClass {
+  name: string
+  description: string
+  dayOfWeek: string
+  startTime: string
+  endTime: string
+  maxCapacity: number
+  beltLevelRequired: string
+  instructorId: number
+  dojoId: number
+}
+
+interface Dojo {
+  id: number
+  name: string
+  address: string | null
+  phone: string | null
+  email: string | null
+  createdAt: string
+}
+
+const useClasses = () => {
+  return useQuery({
+    queryKey: ["classes"],
+    queryFn: async (): Promise<Class[]> => {
+      const response = await fetch("/api/classes", {
+        credentials: "include",
+      })
+      if (!response.ok) {
+        throw new Error("Failed to fetch classes")
+      }
+      return response.json()
+    },
+  })
+}
+
+const useStudents = () => {
+  return useQuery({
+    queryKey: ["students"],
+    queryFn: async (): Promise<Student[]> => {
+      const response = await fetch("/api/students", {
+        credentials: "include",
+      })
+      if (!response.ok) {
+        throw new Error("Failed to fetch students")
+      }
+      return response.json()
+  },
+  })
+}
+
+const useDojos = () => {
+  return useQuery({
+    queryKey: ["dojos"],
+    queryFn: async (): Promise<Dojo[]> => {
+      const response = await fetch("/api/dojos", {
+        credentials: "include",
+      })
+      if (!response.ok) {
+        throw new Error("Failed to fetch dojos")
+      }
+      return response.json()
+    },
+  })
+}
+
+const useCreateClass = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (newClass: NewClass) => {
+      const response = await fetch("/api/classes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify(newClass),
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to create class")
+      }
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["classes"] })
+    },
+  })
+}
+
+const useBookClass = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ classId, studentId }: { classId: number; studentId: number }) => {
+      const response = await fetch(`/api/classes/book/${classId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ studentId }),
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to book class")
+      }
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["classes"] })
+    },
+  })
+}
+
+const useUnbookClass = () => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ classId, studentId }: { classId: number; studentId: number }) => {
+      const response = await fetch(`/api/classes/book/${classId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({ studentId }),
+      })
+      if (!response.ok) {
+        const error = await response.json()
+        throw new Error(error.error || "Failed to unbook class")
+      }
+      return response.json()
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["classes"] })
+    },
+  })
+}
+
+function AddClassDialog() {
+  const { user } = useAuth()
+  const { addToast } = useToast()
+  const createClass = useCreateClass()
+  const { data: dojos } = useDojos()
+  const [open, setOpen] = useState(false)
+  const [formData, setFormData] = useState<NewClass>({
+    name: "",
+    description: "",
+    dayOfWeek: "",
+    startTime: "",
+    endTime: "",
+    maxCapacity: 20,
+    beltLevelRequired: "white",
+    instructorId: user?.id || 0,
+    dojoId: 1 // Default to first dojo
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      await createClass.mutateAsync(formData)
+      addToast("Class created successfully!", "success")
+      setOpen(false)
+      setFormData({
+        name: "",
+        description: "",
+        dayOfWeek: "",
+        startTime: "",
+        endTime: "",
+        maxCapacity: 20,
+        beltLevelRequired: "white",
+        instructorId: user?.id || 0,
+        dojoId: 1
+      })
+    } catch (error: any) {
+      console.error("Failed to create class:", error)
+      addToast(error.message || "Failed to create class", "error")
+    }
+  }
+
+  const handleInputChange = (field: keyof NewClass, value: string | number) => {
+    setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>
+          <Plus className="w-4 h-4 mr-2" />
+          Add Class
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Create New Class</DialogTitle>
+          <DialogDescription>
+            Fill in the details to create a new class. Click save when you're done.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit}>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="name">Class Name</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => handleInputChange("name", e.target.value)}
+                placeholder="e.g., Advanced Karate"
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => handleInputChange("description", e.target.value)}
+                placeholder="Class description..."
+                rows={3}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dojoId">Dojo</Label>
+              <Select value={formData.dojoId.toString()} onValueChange={(value) => handleInputChange("dojoId", parseInt(value))}>
+                <SelectTrigger data-testid="dojo-select-trigger">
+                  <SelectValue placeholder="Select dojo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dojos?.map((dojo) => (
+                    <SelectItem key={dojo.id} value={dojo.id.toString()}>
+                      {dojo.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="dayOfWeek">Day of Week</Label>
+              <Select value={formData.dayOfWeek} onValueChange={(value) => handleInputChange("dayOfWeek", value)}>
+                <SelectTrigger data-testid="day-select-trigger">
+                  <SelectValue placeholder="Select day" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="monday">Monday</SelectItem>
+                  <SelectItem value="tuesday">Tuesday</SelectItem>
+                  <SelectItem value="wednesday">Wednesday</SelectItem>
+                  <SelectItem value="thursday">Thursday</SelectItem>
+                  <SelectItem value="friday">Friday</SelectItem>
+                  <SelectItem value="saturday">Saturday</SelectItem>
+                  <SelectItem value="sunday">Sunday</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="startTime">Start Time</Label>
+                <Input
+                  id="startTime"
+                  type="time"
+                  value={formData.startTime}
+                  onChange={(e) => handleInputChange("startTime", e.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="endTime">End Time</Label>
+                <Input
+                  id="endTime"
+                  type="time"
+                  value={formData.endTime}
+                  onChange={(e) => handleInputChange("endTime", e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="maxCapacity">Maximum Capacity</Label>
+              <Input
+                id="maxCapacity"
+                type="number"
+                min="1"
+                max="100"
+                value={formData.maxCapacity}
+                onChange={(e) => handleInputChange("maxCapacity", parseInt(e.target.value))}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="beltLevelRequired">Belt Level Required</Label>
+              <Select value={formData.beltLevelRequired} onValueChange={(value) => handleInputChange("beltLevelRequired", value)}>
+                <SelectTrigger data-testid="belt-select-trigger">
+                  <SelectValue placeholder="Select belt level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="white">White</SelectItem>
+                  <SelectItem value="yellow">Yellow</SelectItem>
+                  <SelectItem value="orange">Orange</SelectItem>
+                  <SelectItem value="green">Green</SelectItem>
+                  <SelectItem value="blue">Blue</SelectItem>
+                  <SelectItem value="purple">Purple</SelectItem>
+                  <SelectItem value="brown">Brown</SelectItem>
+                  <SelectItem value="black">Black</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={createClass.isPending}>
+              {createClass.isPending ? "Creating..." : "Create Class"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 function ClassesContent() {
-  return (
-    <div>
-      <h1 className="text-3xl font-bold text-blue-900 mb-8">Classes</h1>
-      <div className="bg-white p-6 rounded-lg shadow-md border">
-        <p className="text-blue-600">Class management coming soon.</p>
+  const { user } = useAuth()
+  const { addToast } = useToast()
+  const [selectedStudent, setSelectedStudent] = useState<number | null>(null)
+  
+  const { data: classes, isLoading, error } = useClasses()
+  const { data: students, isLoading: studentsLoading } = useStudents()
+  const bookClass = useBookClass()
+  const unbookClass = useUnbookClass()
+
+  const isStaff = user?.role === "instructor"
+  const canBook = user?.role === "student" || user?.role === "parent"
+
+  const handleBookClass = async (classId: number) => {
+    if (!selectedStudent) return
+    try {
+      await bookClass.mutateAsync({ classId, studentId: selectedStudent })
+      addToast("Class booked successfully!", "success")
+    } catch (error: any) {
+      console.error("Failed to book class:", error)
+      addToast(error.message || "Failed to book class", "error")
+    }
+  }
+
+  const handleUnbookClass = async (classId: number) => {
+    if (!selectedStudent) return
+    try {
+      await unbookClass.mutateAsync({ classId, studentId: selectedStudent })
+      addToast("Booking cancelled successfully!", "success")
+    } catch (error: any) {
+      console.error("Failed to unbook class:", error)
+      addToast(error.message || "Failed to cancel booking", "error")
+    }
+  }
+
+  const getAvailableStudents = () => {
+    if (!students) return []
+    if (user?.role === "student") {
+      return students.filter(student => student.userId === user.id)
+    }
+    if (user?.role === "parent") {
+      return students.filter(student => student.parentId === user.id)
+    }
+    return []
+  }
+
+  const formatTime = (time: string) => {
+    return time
+  }
+
+  const formatDay = (day: string) => {
+    return day.charAt(0).toUpperCase() + day.slice(1)
+  }
+
+  if (isLoading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-3xl font-bold">Classes</h1>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i} className="animate-pulse">
+              <CardHeader>
+                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+              </CardHeader>
+              <CardContent>
+                <div className="h-3 bg-gray-200 rounded w-full mb-2"></div>
+                <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold mb-4">Classes</h1>
+          <p className="text-red-500">Failed to load classes. Please try again.</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="container mx-auto p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-3xl font-bold">Classes</h1>
+        {isStaff && <AddClassDialog />}
+      </div>
+
+      {canBook && students && (
+        <div className="mb-6">
+          <Label htmlFor="student-select" className="text-sm font-medium">
+            Select Student
+          </Label>
+          <Select value={selectedStudent?.toString() || ""} onValueChange={(value) => setSelectedStudent(parseInt(value))}>
+            <SelectTrigger data-testid="student-select-trigger" className="w-full max-w-xs">
+              <SelectValue placeholder="Choose a student" />
+            </SelectTrigger>
+            <SelectContent>
+              {getAvailableStudents().map((student) => (
+                <SelectItem key={student.id} value={student.id.toString()}>
+                  Student #{student.id} ({student.beltLevel} belt)
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {classes?.map((cls) => (
+          <Card key={cls.id} className="hover:shadow-lg transition-shadow" data-testid="class-card">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="text-lg" data-testid="class-name">{cls.name}</CardTitle>
+                  <CardDescription className="mt-1">
+                    {cls.description || "No description available"}
+                  </CardDescription>
+                </div>
+                <Badge variant={cls.isActive ? "default" : "secondary"}>
+                  {cls.isActive ? "Active" : "Inactive"}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex items-center text-sm text-muted-foreground" data-testid="class-schedule">
+                  <Calendar className="w-4 h-4 mr-2" />
+                  {formatDay(cls.dayOfWeek)}
+                </div>
+                <div className="flex items-center text-sm text-muted-foreground" data-testid="class-time">
+                  <Clock className="w-4 h-4 mr-2" />
+                  {formatTime(cls.startTime)} - {formatTime(cls.endTime)}
+                </div>
+                <div className="flex items-center text-sm text-muted-foreground" data-testid="class-enrollment">
+                  <Users className="w-4 h-4 mr-2" />
+                  {cls.currentEnrollment}/{cls.maxCapacity} enrolled
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" data-testid="class-belt-level">{cls.beltLevelRequired} belt required</Badge>
+                </div>
+                
+                {canBook && selectedStudent && (
+                  <div className="flex gap-2 mt-4">
+                    <Button
+                      size="sm"
+                      onClick={() => handleBookClass(cls.id)}
+                      disabled={bookClass.isPending || cls.currentEnrollment >= cls.maxCapacity}
+                      className="flex-1"
+                    >
+                      <BookOpen className="w-4 h-4 mr-1" />
+                      Book
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleUnbookClass(cls.id)}
+                      disabled={unbookClass.isPending}
+                      className="flex-1"
+                    >
+                      <BookX className="w-4 h-4 mr-1" />
+                      Unbook
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {classes?.length === 0 && (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">No classes available.</p>
+        </div>
+      )}
     </div>
-  );
+  )
 }
 
 export default function ClassesPage() {
