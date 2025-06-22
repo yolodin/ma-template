@@ -1,4 +1,4 @@
-import { User, InsertUser, Student, InsertStudent, Dojo, Class, InsertClass, Attendance, InsertAttendance } from "../shared/schema.js";
+import { User, InsertUser, Student, InsertStudent, Dojo, Class, InsertClass, UpdateClass, Attendance, InsertAttendance, Booking, InsertBooking } from "../shared/schema.js";
 import * as bcrypt from "bcryptjs";
 
 // Feature 1-4: Storage interface for user, student, dojo, and class management
@@ -29,7 +29,7 @@ export interface IStorage {
   getClassesByDay(dayOfWeek: string): Promise<Class[]>;
   getAllClasses(): Promise<Class[]>;
   createClass(classData: InsertClass): Promise<Class>;
-  updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined>;
+  updateClass(id: number, classData: UpdateClass): Promise<Class | undefined>;
   deleteClass(id: number): Promise<boolean>;
 
   // Attendance (Feature 5)
@@ -42,6 +42,15 @@ export interface IStorage {
   createAttendance(attendanceData: InsertAttendance): Promise<Attendance>;
   checkDuplicateAttendance(studentId: number, classId: number, date: Date): Promise<boolean>;
   processQRCodeCheckIn(qrCode: string, classId: number, checkedInBy?: number): Promise<Attendance>;
+
+  // Bookings (Feature 6)
+  getBooking(id: number): Promise<Booking | undefined>;
+  getBookingsByStudent(studentId: number): Promise<Booking[]>;
+  getBookingsByClass(classId: number): Promise<Booking[]>;
+  getBookingsByUser(userId: number): Promise<Booking[]>;
+  createBooking(bookingData: InsertBooking): Promise<Booking>;
+  deleteBooking(id: number): Promise<boolean>;
+  isStudentBooked(studentId: number, classId: number): Promise<boolean>;
 }
 
 // In-memory storage implementation for Features 1-4
@@ -51,11 +60,13 @@ export class MemStorage implements IStorage {
   private dojos: Map<number, Dojo> = new Map();
   private classes: Map<number, Class> = new Map();
   private attendance: Map<number, Attendance> = new Map();
+  private bookings: Map<number, Booking> = new Map();
   private currentUserId = 1;
   private currentStudentId = 1;
   private currentDojoId = 1;
   private currentClassId = 1;
   private currentAttendanceId = 1;
+  private currentBookingId = 1;
 
   constructor() {
     this.seedData();
@@ -335,7 +346,7 @@ export class MemStorage implements IStorage {
     return newClass;
   }
 
-  async updateClass(id: number, classData: Partial<InsertClass>): Promise<Class | undefined> {
+  async updateClass(id: number, classData: UpdateClass): Promise<Class | undefined> {
     const existingClass = this.classes.get(id);
     if (!existingClass) {
       return undefined;
@@ -463,6 +474,46 @@ export class MemStorage implements IStorage {
     };
 
     return await this.createAttendance(attendanceData);
+  }
+
+  // Bookings (Feature 6)
+  async getBooking(id: number): Promise<Booking | undefined> {
+    return this.bookings.get(id);
+  }
+
+  async getBookingsByStudent(studentId: number): Promise<Booking[]> {
+    return Array.from(this.bookings.values()).filter(booking => booking.studentId === studentId);
+  }
+
+  async getBookingsByClass(classId: number): Promise<Booking[]> {
+    return Array.from(this.bookings.values()).filter(booking => booking.classId === classId);
+  }
+
+  async getBookingsByUser(userId: number): Promise<Booking[]> {
+    return Array.from(this.bookings.values()).filter(booking => booking.bookedBy === userId);
+  }
+
+  async createBooking(bookingData: InsertBooking): Promise<Booking> {
+    const booking: Booking = {
+      id: this.currentBookingId++,
+      studentId: bookingData.studentId,
+      classId: bookingData.classId,
+      bookedBy: bookingData.bookedBy,
+      isActive: bookingData.isActive ?? true,
+      bookedAt: new Date(),
+      createdAt: new Date()
+    };
+    this.bookings.set(booking.id, booking);
+    return booking;
+  }
+
+  async deleteBooking(id: number): Promise<boolean> {
+    return this.bookings.delete(id);
+  }
+
+  async isStudentBooked(studentId: number, classId: number): Promise<boolean> {
+    const bookings = await this.getBookingsByStudent(studentId);
+    return bookings.some(booking => booking.classId === classId);
   }
 }
 
