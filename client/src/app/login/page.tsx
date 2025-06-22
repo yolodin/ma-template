@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useToast } from '@/components/toast-provider';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -12,6 +13,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const router = useRouter();
+  const { showToast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,7 +22,7 @@ export default function LoginPage() {
 
     try {
       const user = await login(username, password);
-      
+      showToast({ title: 'Login successful', description: `Welcome, ${user?.username || 'user'}!`, variant: 'success' });
       // Role-based redirects
       if (user?.role === 'instructor') {
         router.push('/dashboard');
@@ -30,6 +32,7 @@ export default function LoginPage() {
       }
     } catch (err) {
       setError('Invalid username or password');
+      showToast({ title: 'Login failed', description: 'Invalid username or password', variant: 'error' });
     } finally {
       setLoading(false);
     }
