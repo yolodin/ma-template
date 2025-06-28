@@ -217,7 +217,7 @@ function AddClassDialog() {
                 id="name"
                 value={formData.name}
                 onChange={(e) => handleInputChange("name", e.target.value)}
-                placeholder="e.g., Advanced Karate"
+                placeholder="e.g., Advanced Taekwondo"
                 required
               />
             </div>
