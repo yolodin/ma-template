@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { apiClient } from '../config/api';
 
 interface User {
   id: number;
@@ -28,22 +29,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (username: string, password: string) => {
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ username, password }),
-        credentials: 'include', // Important for session cookies
-      });
+      const data = await apiClient.login(username, password);
 
-      if (!response.ok) {
-        throw new Error('Login failed');
-      }
-
-      const data = await response.json();
-      
-      // Set user data from session response
+      // Set user data from response
       setUser(data.user);
       return data.user;
     } catch (error) {
@@ -54,11 +42,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      // Call logout endpoint to destroy session
-      await fetch('/api/auth/logout', { 
-        method: 'POST',
-        credentials: 'include',
-      });
+      await apiClient.logout();
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -69,20 +53,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUser = async () => {
     try {
-      const response = await fetch('/api/auth/me', {
-        credentials: 'include', // Important for session cookies
-      });
+      // Only try to fetch user if we have a token
+      const token = localStorage.getItem('auth-token');
+      if (!token) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
 
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData.user);
+      const userData = await apiClient.getCurrentUser() as User;
+      setUser(userData);
+    } catch (error) {
+      // Don't log authentication errors as they're expected when not logged in
+      if (error instanceof Error && error.message.includes('Authentication required')) {
+        // Silently handle authentication errors
+        setUser(null);
       } else {
-        // No valid session
+        console.error('Fetch user error:', error);
         setUser(null);
       }
-    } catch (error) {
-      console.error('Fetch user error:', error);
-      setUser(null);
     } finally {
       setLoading(false);
     }

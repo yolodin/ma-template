@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = 'http://localhost:5000';
+const BACKEND_URL = 'http://localhost:8000';
 
 export async function GET(
   request: NextRequest,
@@ -11,12 +11,11 @@ export async function GET(
   const queryString = url.searchParams.toString();
   
   try {
-    const response = await fetch(`${BACKEND_URL}/api/${path}?${queryString}`, {
+    const response = await fetch(`${BACKEND_URL}/${path}?${queryString}`, {
       headers: {
         'Content-Type': 'application/json',
         ...Object.fromEntries(request.headers.entries()),
       },
-      credentials: 'include',
     });
 
     const data = await response.json();
@@ -38,14 +37,13 @@ export async function POST(
   const body = await request.text();
   
   try {
-    const response = await fetch(`${BACKEND_URL}/api/${path}`, {
+    const response = await fetch(`${BACKEND_URL}/${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...Object.fromEntries(request.headers.entries()),
       },
       body,
-      credentials: 'include',
     });
 
     const data = await response.json();
@@ -67,14 +65,13 @@ export async function PUT(
   const body = await request.text();
   
   try {
-    const response = await fetch(`${BACKEND_URL}/api/${path}`, {
+    const response = await fetch(`${BACKEND_URL}/${path}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         ...Object.fromEntries(request.headers.entries()),
       },
       body,
-      credentials: 'include',
     });
 
     const data = await response.json();
@@ -95,13 +92,12 @@ export async function DELETE(
   const path = params.path.join('/');
   
   try {
-    const response = await fetch(`${BACKEND_URL}/api/${path}`, {
+    const response = await fetch(`${BACKEND_URL}/${path}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
         ...Object.fromEntries(request.headers.entries()),
       },
-      credentials: 'include',
     });
 
     const data = await response.json();

@@ -12,6 +12,7 @@ import { useToast } from "@/components/toast-provider"
 import { ProtectedRoute } from '@/components/protected-route'
 import { Html5QrcodeScanner } from 'html5-qrcode'
 import { Camera, QrCode, Users, Calendar, LogIn, LogOut, UserCheck } from "lucide-react"
+import { apiClient } from "@/config/api"
 
 interface Class {
   id: number
@@ -45,13 +46,7 @@ const useClasses = () => {
   return useQuery({
     queryKey: ["classes"],
     queryFn: async (): Promise<Class[]> => {
-      const response = await fetch("/api/classes", {
-        credentials: "include",
-      })
-      if (!response.ok) {
-        throw new Error("Failed to fetch classes")
-      }
-      return response.json()
+      return apiClient.get<Class[]>('/api/classes')
     },
   })
 }
@@ -60,13 +55,7 @@ const useStudents = () => {
   return useQuery({
     queryKey: ["students"],
     queryFn: async (): Promise<Student[]> => {
-      const response = await fetch("/api/students", {
-        credentials: "include",
-      })
-      if (!response.ok) {
-        throw new Error("Failed to fetch students")
-      }
-      return response.json()
+      return apiClient.get<Student[]>('/api/students')
     },
   })
 }
@@ -75,19 +64,7 @@ const useQRCheckIn = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ qrCode, classId }: { qrCode: string; classId: number }) => {
-      const response = await fetch("/api/attendance/qr-scan", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({ qrCode, classId }),
-      })
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to process QR check-in")
-      }
-      return response.json()
+      return apiClient.post<any>('/api/attendance/qr-scan', { qrCode, classId })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["attendance"] })
@@ -99,24 +76,12 @@ const useManualCheckIn = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ studentId, classId, notes }: { studentId: number; classId: number; notes?: string }) => {
-      const response = await fetch("/api/attendance/manual", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({
-          studentId,
-          classId,
-          notes,
-          checkInMethod: "manual"
-        }),
+      return apiClient.post<any>('/api/attendance/manual', {
+        studentId,
+        classId,
+        notes,
+        checkInMethod: "manual"
       })
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to process manual check-in")
-      }
-      return response.json()
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["attendance"] })
