@@ -20,12 +20,15 @@ export default function LoginPage() {
 
     try {
       const user = await login(username, password);
-      
+
       // Role-based redirects
       if (user?.role === 'instructor') {
         router.push('/dashboard');
+      } else if (user?.role === 'parent') {
+        // Parents go to students page to see their own students
+        router.push('/students');
       } else {
-        // Parent and student users go to classes page
+        // Student users go to classes page
         router.push('/classes');
       }
     } catch (err) {
@@ -74,14 +77,33 @@ export default function LoginPage() {
                 required
               />
             </div>
-            <Button 
-              type="submit" 
-              className="w-full bg-dojo-primary hover:bg-dojo-primary/90"
+            <Button
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md"
               disabled={loading}
             >
               {loading ? 'Logging in...' : 'Login'}
             </Button>
           </form>
+
+          {/* Test Credentials Helper */}
+          <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3">Test Accounts</h3>
+            <div className="space-y-2 text-xs text-gray-600">
+              <div className="flex justify-between">
+                <span className="font-medium">Instructor:</span>
+                <span>instructor / password12377</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium">Parent:</span>
+                <span>parent / parent12377</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium">Student:</span>
+                <span>student1 / student12377</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </main>

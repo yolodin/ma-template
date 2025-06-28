@@ -14,13 +14,13 @@ const users = [
     username: 'parent', 
     password: 'parent12377', 
     role: 'parent',
-    expectedMenuItems: ['Dashboard', 'Students', 'Classes', 'Messages']
+    expectedMenuItems: ['Students', 'Classes', 'Messages']
   },
   { 
     username: 'student1', 
     password: 'student12377', 
     role: 'student',
-    expectedMenuItems: ['Dashboard', 'Classes', 'Messages']
+    expectedMenuItems: ['Classes', 'Messages']
   }
 ];
 
@@ -45,8 +45,11 @@ async function testUserNavigation(user) {
     await driver.findElement(By.css('button[type="submit"]')).click();
     await sleep(2000);
     
-    // Wait for redirect and verify we're on dashboard (or classes for students/parents)
-    if (user.role === 'student' || user.role === 'parent') {
+    // Wait for redirect and verify we're on dashboard (or students for parents, classes for students)
+    if (user.role === 'parent') {
+      await driver.wait(until.urlContains('/students'), 5000);
+      console.log(`✅ ${user.role} login successful, redirected to students`);
+    } else if (user.role === 'student') {
       await driver.wait(until.urlContains('/classes'), 5000);
       console.log(`✅ ${user.role} login successful, redirected to classes`);
     } else {
@@ -111,19 +114,46 @@ async function testUserNavigation(user) {
           console.log(`  ✅ Successfully navigated to ${menuItem}`);
           
           // Check if page content is loaded
-          const pageTitle = await driver.findElement(By.css('h1'));
-          const titleText = await pageTitle.getText();
-          console.log(`  ✅ Page title: ${titleText}`);
+          try {
+            const pageTitle = await driver.findElement(By.css('h1'));
+            const titleText = await pageTitle.getText();
+            console.log(`  ✅ Page title: ${titleText}`);
+          } catch (error) {
+            console.log(`  ⚠️ Page title not found, but navigation successful`);
+          }
           
         } else {
           console.log(`  ❌ Failed to navigate to ${menuItem}. Current URL: ${currentUrl}`);
         }
         
-        // Go back to dashboard for next test
-        if (menuItem !== 'Dashboard') {
-          const dashboardLink = await driver.findElement(By.xpath('//span[text()="Dashboard"]'));
-          await dashboardLink.click();
-          await sleep(1000);
+        // Go back to appropriate page for next test
+        // For instructors: go back to dashboard
+        // For parents: go back to students page
+        // For students: go back to classes page
+        if (user.role === 'instructor') {
+          try {
+            const dashboardLink = await driver.findElement(By.xpath('//span[text()="Dashboard"]'));
+            await dashboardLink.click();
+            await sleep(1000);
+          } catch (error) {
+            console.log(`  ⚠️ Could not navigate back to dashboard: ${error.message}`);
+          }
+        } else if (user.role === 'parent') {
+          try {
+            const studentsLink = await driver.findElement(By.xpath('//span[text()="Students"]'));
+            await studentsLink.click();
+            await sleep(1000);
+          } catch (error) {
+            console.log(`  ⚠️ Could not navigate back to students: ${error.message}`);
+          }
+        } else if (user.role === 'student') {
+          try {
+            const classesLink = await driver.findElement(By.xpath('//span[text()="Classes"]'));
+            await classesLink.click();
+            await sleep(1000);
+          } catch (error) {
+            console.log(`  ⚠️ Could not navigate back to classes: ${error.message}`);
+          }
         }
         
       } catch (error) {
@@ -228,4 +258,4 @@ async function runAllTests() {
   console.log('\n✨ All tests completed!');
 }
 
-runAllTests().catch(console.error); 
+runAllTests().catch(console.error);

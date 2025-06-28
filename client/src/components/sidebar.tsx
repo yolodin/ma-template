@@ -6,18 +6,18 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import {
-    LayoutDashboard,
-    Users,
-    Calendar,
-    MessageSquare,
-    ClipboardList,
-    LogOut,
-    Menu,
+  LayoutDashboard,
+  Users,
+  Calendar,
+  MessageSquare,
+  ClipboardList,
+  LogOut,
+  Menu,
 } from 'lucide-react';
 import {
-    Sheet,
-    SheetContent,
-    SheetTrigger,
+  Sheet,
+  SheetContent,
+  SheetTrigger,
 } from '@/components/ui/sheet';
 
 interface SidebarProps {
@@ -36,7 +36,7 @@ export function Sidebar({ className }: SidebarProps) {
       name: 'Dashboard',
       href: '/dashboard',
       icon: LayoutDashboard,
-      roles: ['instructor', 'parent', 'student'],
+      roles: ['instructor'],
     },
     {
       name: 'Students',
@@ -65,7 +65,7 @@ export function Sidebar({ className }: SidebarProps) {
   ];
 
   // Filter navigation items based on user role
-  const visibleItems = navigationItems.filter(item => 
+  const visibleItems = navigationItems.filter(item =>
     item.roles.includes(user.role)
   );
 
@@ -105,7 +105,7 @@ export function Sidebar({ className }: SidebarProps) {
         {visibleItems.map((item) => {
           const isActive = pathname === item.href;
           const Icon = item.icon;
-          
+
           return (
             <Link
               key={item.name}

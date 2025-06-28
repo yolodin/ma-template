@@ -63,8 +63,10 @@ async function testLogin(user) {
     // Check if we're on the expected page
     if (user.role === 'instructor' && currentUrl.includes('/dashboard')) {
       console.log(`  ✅ Instructor correctly redirected to dashboard`);
-    } else if ((user.role === 'parent' || user.role === 'student') && currentUrl.includes('/classes')) {
-      console.log(`  ✅ ${user.role} correctly redirected to classes`);
+    } else if (user.role === 'parent' && currentUrl.includes('/students')) {
+      console.log(`  ✅ Parent correctly redirected to students`);
+    } else if (user.role === 'student' && currentUrl.includes('/classes')) {
+      console.log(`  ✅ Student correctly redirected to classes`);
     } else {
       console.log(`  ❌ Unexpected redirect for ${user.role}`);
     }

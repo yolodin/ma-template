@@ -67,7 +67,7 @@ const useStudents = () => {
         throw new Error("Failed to fetch students")
       }
       return response.json()
-  },
+    },
   })
 }
 
@@ -105,9 +105,9 @@ const useManualCheckIn = () => {
           "Content-Type": "application/json",
         },
         credentials: "include",
-        body: JSON.stringify({ 
-          studentId, 
-          classId, 
+        body: JSON.stringify({
+          studentId,
+          classId,
           notes,
           checkInMethod: "manual"
         }),
@@ -132,8 +132,8 @@ function QRScanner({ onScan, isScanning, mode }: { onScan: (qrCode: string) => v
     if (isScanning && containerRef.current && !scannerRef.current) {
       scannerRef.current = new Html5QrcodeScanner(
         "qr-reader",
-        { 
-          fps: 10, 
+        {
+          fps: 10,
           qrbox: { width: 250, height: 250 },
           aspectRatio: 1.0
         },
@@ -199,7 +199,7 @@ function ManualCheckIn({ selectedClass, classes }: { selectedClass: number | nul
   const { addToast } = useToast()
   const [selectedStudent, setSelectedStudent] = useState<number | null>(null)
   const [notes, setNotes] = useState("")
-  
+
   const { data: students, isLoading: studentsLoading } = useStudents()
   const manualCheckIn = useManualCheckIn()
 
@@ -210,10 +210,10 @@ function ManualCheckIn({ selectedClass, classes }: { selectedClass: number | nul
     }
 
     try {
-      await manualCheckIn.mutateAsync({ 
-        studentId: selectedStudent, 
-        classId: selectedClass, 
-        notes: notes.trim() || undefined 
+      await manualCheckIn.mutateAsync({
+        studentId: selectedStudent,
+        classId: selectedClass,
+        notes: notes.trim() || undefined
       })
       addToast("Manual check-in successful!", "success")
       setSelectedStudent(null)
@@ -243,8 +243,8 @@ function ManualCheckIn({ selectedClass, classes }: { selectedClass: number | nul
           <Label htmlFor="student-select" className="text-sm font-medium">
             Select Student
           </Label>
-          <Select 
-            value={selectedStudent?.toString() || ""} 
+          <Select
+            value={selectedStudent?.toString() || ""}
             onValueChange={(value) => setSelectedStudent(parseInt(value))}
             disabled={!selectedClass}
           >
@@ -291,7 +291,7 @@ function ManualCheckIn({ selectedClass, classes }: { selectedClass: number | nul
           </div>
         )}
 
-        <Button 
+        <Button
           onClick={handleManualCheckIn}
           disabled={!selectedClass || !selectedStudent || manualCheckIn.isPending}
           className="w-full"
@@ -417,8 +417,8 @@ function AttendanceContent() {
               <Label htmlFor="class-select" className="text-sm font-medium">
                 Class
               </Label>
-              <Select 
-                value={selectedClass?.toString() || ""} 
+              <Select
+                value={selectedClass?.toString() || ""}
                 onValueChange={(value) => setSelectedClass(parseInt(value))}
               >
                 <SelectTrigger data-testid="class-select-trigger" className="w-full">
@@ -491,9 +491,9 @@ function AttendanceContent() {
         {/* QR Scanner */}
         <div className="space-y-4">
           <QRScanner onScan={handleQRScan} isScanning={isScanning} mode={mode} />
-          
+
           <div className="flex gap-2">
-            <Button 
+            <Button
               onClick={handleStartScanning}
               disabled={!selectedClass || isScanning}
               className="flex-1"
@@ -501,7 +501,7 @@ function AttendanceContent() {
               <Camera className="w-4 h-4 mr-2" />
               Start Scanning
             </Button>
-            <Button 
+            <Button
               onClick={handleStopScanning}
               disabled={!isScanning}
               variant="outline"
@@ -556,7 +556,7 @@ function AttendanceContent() {
 
 export default function AttendancePage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute roles={['instructor']}>
       <AttendanceContent />
     </ProtectedRoute>
   )

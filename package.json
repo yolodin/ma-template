@@ -15,7 +15,10 @@
     "test:verbose": "jest --verbose",
     "test:api": "jest tests/api.test.ts",
     "test:storage": "jest tests/storage.test.ts",
-    "test:schema": "jest tests/schema.test.ts"
+    "test:schema": "jest tests/schema.test.ts",
+    "test:selenium": "node run-selenium-tests.js",
+    "test:selenium:all": "node run-selenium-tests.js all",
+    "test:selenium:list": "node run-selenium-tests.js list"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

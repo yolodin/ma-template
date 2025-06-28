@@ -6,17 +6,27 @@ import { useEffect } from 'react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  roles?: string[];
 }
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
+    } else if (!loading && user && roles && !roles.includes(user.role)) {
+      // Redirect to appropriate page based on role
+      if (user.role === 'parent') {
+        router.push('/students');
+      } else if (user.role === 'student') {
+        router.push('/classes');
+      } else {
+        router.push('/dashboard');
+      }
     }
-  }, [user, loading, router]);
+  }, [user, loading, router, roles]);
 
   if (loading) {
     return (
@@ -28,6 +38,11 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!user) {
     return null; // Will redirect to login
+  }
+
+  // Check if user has required role
+  if (roles && !roles.includes(user.role)) {
+    return null; // Will redirect to appropriate page
   }
 
   return <>{children}</>;

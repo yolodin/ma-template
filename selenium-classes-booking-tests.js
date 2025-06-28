@@ -31,7 +31,7 @@ async function login(driver, userType) {
   await submitButton.click();
   
   // Wait for redirect
-  const expectedPath = userType === 'parent' || userType === 'student' ? '/classes' : '/dashboard';
+  const expectedPath = userType === 'parent' ? '/students' : userType === 'student' ? '/classes' : '/dashboard';
   await driver.wait(until.urlContains(expectedPath), 5000);
 }
 
