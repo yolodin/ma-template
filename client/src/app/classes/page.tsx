@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/components/toast-provider"
 import { Plus, Calendar, Clock, Users, BookOpen, BookX } from "lucide-react"
 import { ProtectedRoute } from '@/components/protected-route'
+import { apiClient } from "@/config/api"
 
 interface Class {
   id: number
@@ -68,13 +69,7 @@ const useClasses = () => {
   return useQuery({
     queryKey: ["classes"],
     queryFn: async (): Promise<Class[]> => {
-      const response = await fetch("/api/classes", {
-        credentials: "include",
-      })
-      if (!response.ok) {
-        throw new Error("Failed to fetch classes")
-      }
-      return response.json()
+      return apiClient.get<Class[]>('/api/classes')
     },
   })
 }
@@ -83,14 +78,8 @@ const useStudents = () => {
   return useQuery({
     queryKey: ["students"],
     queryFn: async (): Promise<Student[]> => {
-      const response = await fetch("/api/students", {
-        credentials: "include",
-      })
-      if (!response.ok) {
-        throw new Error("Failed to fetch students")
-      }
-      return response.json()
-  },
+      return apiClient.get<Student[]>('/api/students')
+    },
   })
 }
 
@@ -98,13 +87,7 @@ const useDojos = () => {
   return useQuery({
     queryKey: ["dojos"],
     queryFn: async (): Promise<Dojo[]> => {
-      const response = await fetch("/api/dojos", {
-        credentials: "include",
-      })
-      if (!response.ok) {
-        throw new Error("Failed to fetch dojos")
-      }
-      return response.json()
+      return apiClient.get<Dojo[]>('/api/dojos')
     },
   })
 }
@@ -113,19 +96,7 @@ const useCreateClass = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async (newClass: NewClass) => {
-      const response = await fetch("/api/classes", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(newClass),
-      })
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to create class")
-      }
-      return response.json()
+      return apiClient.post<Class>('/api/classes', newClass)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["classes"] })
@@ -137,19 +108,7 @@ const useBookClass = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ classId, studentId }: { classId: number; studentId: number }) => {
-      const response = await fetch(`/api/classes/book/${classId}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({ studentId }),
-      })
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to book class")
-      }
-      return response.json()
+      return apiClient.post<any>(`/api/bookings`, { classId, studentId })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["classes"] })
@@ -161,19 +120,9 @@ const useUnbookClass = () => {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: async ({ classId, studentId }: { classId: number; studentId: number }) => {
-      const response = await fetch(`/api/classes/book/${classId}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify({ studentId }),
-      })
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || "Failed to unbook class")
-      }
-      return response.json()
+      // Note: We'll need to implement a proper unbook endpoint or use a different approach
+      // For now, we'll use a DELETE request to the bookings endpoint
+      return apiClient.delete<any>(`/api/bookings/${classId}/${studentId}`)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["classes"] })
@@ -366,7 +315,7 @@ function ClassesContent() {
   const { user } = useAuth()
   const { addToast } = useToast()
   const [selectedStudent, setSelectedStudent] = useState<number | null>(null)
-  
+
   const { data: classes, isLoading, error } = useClasses()
   const { data: students, isLoading: studentsLoading } = useStudents()
   const bookClass = useBookClass()
@@ -511,7 +460,7 @@ function ClassesContent() {
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" data-testid="class-belt-level">{cls.beltLevelRequired} belt required</Badge>
                 </div>
-                
+
                 {canBook && selectedStudent && (
                   <div className="flex gap-2 mt-4">
                     <Button

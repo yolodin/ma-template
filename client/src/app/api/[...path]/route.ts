@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const BACKEND_URL = 'http://localhost:5000';
+const BACKEND_URL = 'http://localhost:8000';
 
 export async function GET(
   request: NextRequest,
@@ -16,7 +16,6 @@ export async function GET(
         'Content-Type': 'application/json',
         ...Object.fromEntries(request.headers.entries()),
       },
-      credentials: 'include',
     });
 
     const data = await response.json();
@@ -45,7 +44,6 @@ export async function POST(
         ...Object.fromEntries(request.headers.entries()),
       },
       body,
-      credentials: 'include',
     });
 
     const data = await response.json();
@@ -74,7 +72,6 @@ export async function PUT(
         ...Object.fromEntries(request.headers.entries()),
       },
       body,
-      credentials: 'include',
     });
 
     const data = await response.json();
@@ -101,7 +98,6 @@ export async function DELETE(
         'Content-Type': 'application/json',
         ...Object.fromEntries(request.headers.entries()),
       },
-      credentials: 'include',
     });
 
     const data = await response.json();

@@ -1,6 +1,23 @@
+"use client";
+
 import { ProtectedRoute } from '@/components/protected-route';
+import { useRouter } from 'next/navigation';
 
 function DashboardContent() {
+  const router = useRouter();
+
+  const handleAddNewStudent = () => {
+    router.push('/students');
+  };
+
+  const handleScheduleClass = () => {
+    router.push('/classes');
+  };
+
+  const handleViewAttendanceReport = () => {
+    router.push('/attendance');
+  };
+
   return (
     <div>
       <h1 className="text-3xl font-bold text-blue-900 mb-8">Dashboard</h1>
@@ -46,13 +63,23 @@ function DashboardContent() {
         <div className="bg-white p-6 rounded-lg shadow-md border">
           <h2 className="text-xl font-semibold text-blue-900 mb-4">Quick Actions</h2>
           <div className="space-y-3">
-            <button className="w-full text-left p-3 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors">
+            <button
+              onClick={handleAddNewStudent}
+              className="w-full text-left p-3 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors"
+              data-testid="add-new-student-button"
+            >
               Add New Student
             </button>
-            <button className="w-full text-left p-3 rounded-md bg-blue-100 text-blue-900 hover:bg-blue-200 transition-colors">
+            <button
+              onClick={handleScheduleClass}
+              className="w-full text-left p-3 rounded-md bg-blue-100 text-blue-900 hover:bg-blue-200 transition-colors"
+            >
               Schedule Class
             </button>
-            <button className="w-full text-left p-3 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors">
+            <button
+              onClick={handleViewAttendanceReport}
+              className="w-full text-left p-3 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors"
+            >
               View Attendance Report
             </button>
           </div>

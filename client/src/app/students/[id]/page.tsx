@@ -6,6 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Separator } from '@/components/ui/separator';
+import { apiClient } from '@/config/api';
 
 interface Student {
   id: number;
@@ -13,9 +15,29 @@ interface Student {
   parentId: number;
   dojoId: number;
   beltLevel: string;
-  age: number;
+  age: number | null;
   qrCode: string;
   isActive: boolean;
+  createdAt: string;
+}
+
+interface User {
+  id: number;
+  username: string;
+  email: string | null;
+  role: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  createdAt: string;
+}
+
+interface Dojo {
+  id: number;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
   createdAt: string;
 }
 
@@ -47,13 +69,26 @@ interface Class {
   createdAt: string;
 }
 
+interface Booking {
+  id: number;
+  studentId: number;
+  classId: number;
+  bookedBy: number;
+  bookedAt: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export default function StudentProfilePage() {
   const params = useParams();
   const studentId = params.id as string;
-  
+
   const [student, setStudent] = useState<Student | null>(null);
+  const [parent, setParent] = useState<User | null>(null);
+  const [dojo, setDojo] = useState<Dojo | null>(null);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [classes, setClasses] = useState<Class[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -61,27 +96,50 @@ export default function StudentProfilePage() {
     const fetchStudentData = async () => {
       try {
         setLoading(true);
-        
+
         // Fetch student data
-        const studentResponse = await fetch(`/api/students/${studentId}`);
-        if (!studentResponse.ok) {
-          throw new Error('Failed to fetch student data');
-        }
-        const studentData = await studentResponse.json();
+        const studentData = await apiClient.get<Student>(`/api/students/${studentId}`);
         setStudent(studentData);
 
+        // Fetch parent data
+        try {
+          const parentData = await apiClient.get<User>(`/api/users/${studentData.parentId}`);
+          setParent(parentData);
+        } catch (err) {
+          console.log('Parent data not available');
+        }
+
+        // Fetch dojo data
+        try {
+          const dojoData = await apiClient.get<Dojo>(`/api/dojos/${studentData.dojoId}`);
+          setDojo(dojoData);
+        } catch (err) {
+          console.log('Dojo data not available');
+        }
+
         // Fetch attendance data
-        const attendanceResponse = await fetch(`/api/students/${studentId}/attendance`);
-        if (attendanceResponse.ok) {
-          const attendanceData = await attendanceResponse.json();
+        try {
+          const attendanceData = await apiClient.get<Attendance[]>(`/api/students/${studentId}/attendance`);
           setAttendance(attendanceData);
+        } catch (err) {
+          console.log('Attendance data not available');
         }
 
         // Fetch classes data for attendance context
-        const classesResponse = await fetch('/api/classes');
-        if (classesResponse.ok) {
-          const classesData = await classesResponse.json();
+        try {
+          const classesData = await apiClient.get<Class[]>('/api/classes');
           setClasses(classesData);
+        } catch (err) {
+          console.log('Classes data not available');
+        }
+
+        // Fetch bookings data
+        try {
+          const bookingsData = await apiClient.get<Booking[]>('/api/bookings');
+          const studentBookings = bookingsData.filter(booking => booking.studentId === studentData.id);
+          setBookings(studentBookings);
+        } catch (err) {
+          console.log('Bookings data not available');
         }
 
       } catch (err) {
@@ -131,6 +189,19 @@ export default function StudentProfilePage() {
     return colors[beltLevel.toLowerCase()] || 'bg-gray-100 text-gray-800';
   };
 
+  const calculateAttendanceRate = () => {
+    if (attendance.length === 0) return 0;
+    const totalClasses = classes.length;
+    const attendedClasses = attendance.length;
+    return Math.round((attendedClasses / totalClasses) * 100);
+  };
+
+  const getRecentAttendance = () => {
+    return attendance
+      .sort((a, b) => new Date(b.checkInTime).getTime() - new Date(a.checkInTime).getTime())
+      .slice(0, 5);
+  };
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -171,7 +242,7 @@ export default function StudentProfilePage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-dojo-primary mb-2">
+        <h1 className="text-3xl font-bold text-blue-900 mb-2">
           Student Profile
         </h1>
         <p className="text-gray-600">
@@ -191,12 +262,14 @@ export default function StudentProfilePage() {
                 <label className="text-sm font-medium text-gray-500">Student ID</label>
                 <p className="text-lg font-semibold">#{student.id}</p>
               </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-500">Age</label>
-                <p className="text-lg">{student.age} years old</p>
-              </div>
-              
+
+              {student.age && (
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Age</label>
+                  <p className="text-lg">{student.age} years old</p>
+                </div>
+              )}
+
               <div>
                 <label className="text-sm font-medium text-gray-500">Belt Rank</label>
                 <div className="mt-1">
@@ -205,29 +278,105 @@ export default function StudentProfilePage() {
                   </Badge>
                 </div>
               </div>
-              
+
               <div>
                 <label className="text-sm font-medium text-gray-500">QR Code</label>
                 <p className="text-sm font-mono bg-gray-100 p-2 rounded">
                   {student.qrCode}
                 </p>
               </div>
-              
+
               <div>
                 <label className="text-sm font-medium text-gray-500">Member Since</label>
                 <p className="text-sm">{formatDate(student.createdAt)}</p>
               </div>
+
+              <Separator />
+
+              {/* Parent Information */}
+              {parent && (
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-3">Parent Information</h4>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Name</label>
+                      <p className="text-sm">{parent.firstName} {parent.lastName}</p>
+                    </div>
+                    {parent.email && (
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Email</label>
+                        <p className="text-sm">{parent.email}</p>
+                      </div>
+                    )}
+                    {parent.phone && (
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Phone</label>
+                        <p className="text-sm">{parent.phone}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <Separator />
+
+              {/* Dojo Information */}
+              {dojo && (
+                <div>
+                  <h4 className="font-medium text-gray-900 mb-3">Dojo Information</h4>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Dojo</label>
+                      <p className="text-sm">{dojo.name}</p>
+                    </div>
+                    {dojo.address && (
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Address</label>
+                        <p className="text-sm">{dojo.address}</p>
+                      </div>
+                    )}
+                    {dojo.phone && (
+                      <div>
+                        <label className="text-sm font-medium text-gray-500">Phone</label>
+                        <p className="text-sm">{dojo.phone}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Attendance History */}
+        {/* Statistics and Recent Activity */}
         <div className="lg:col-span-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold text-blue-600">{attendance.length}</div>
+                <div className="text-sm text-gray-500">Total Classes Attended</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold text-green-600">{calculateAttendanceRate()}%</div>
+                <div className="text-sm text-gray-500">Attendance Rate</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-4">
+                <div className="text-2xl font-bold text-purple-600">{bookings.length}</div>
+                <div className="text-sm text-gray-500">Active Bookings</div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Recent Attendance */}
           <Card>
             <CardHeader>
-              <CardTitle>Attendance History</CardTitle>
+              <CardTitle>Recent Attendance</CardTitle>
               <CardDescription>
-                Recent class attendance records
+                Last 5 class attendance records
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -243,7 +392,7 @@ export default function StudentProfilePage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {attendance.slice(0, 10).map((record) => (
+                    {getRecentAttendance().map((record) => (
                       <TableRow key={record.id}>
                         <TableCell>{formatDate(record.checkInTime)}</TableCell>
                         <TableCell>{getClassName(record.classId)}</TableCell>
@@ -269,6 +418,49 @@ export default function StudentProfilePage() {
           </Card>
         </div>
       </div>
+
+      {/* Active Bookings */}
+      {bookings.length > 0 && (
+        <div className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Active Bookings</CardTitle>
+              <CardDescription>
+                Currently booked classes
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Class</TableHead>
+                    <TableHead>Day</TableHead>
+                    <TableHead>Time</TableHead>
+                    <TableHead>Booked On</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {bookings.filter(booking => booking.isActive).map((booking) => {
+                    const classInfo = classes.find(c => c.id === booking.classId);
+                    return (
+                      <TableRow key={booking.id}>
+                        <TableCell>{classInfo?.name || `Class #${booking.classId}`}</TableCell>
+                        <TableCell className="capitalize">{classInfo?.dayOfWeek || '-'}</TableCell>
+                        <TableCell>{classInfo ? `${classInfo.startTime} - ${classInfo.endTime}` : '-'}</TableCell>
+                        <TableCell>{formatDate(booking.bookedAt)}</TableCell>
+                        <TableCell>
+                          <Badge variant="default">Active</Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Belt Test Results */}
       <div className="mt-6">

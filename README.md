@@ -1,17 +1,17 @@
 # YOLO Dojo Management System
 
-A comprehensive martial arts management system built with modern web technologies, featuring role-based access control and comprehensive testing.
+A comprehensive martial arts management system built with modern web technologies, featuring role-based access control and comprehensive testing. **Built with FastAPI backend and React frontend!**
 
 ## 🎯 Features
 
 ### ✅ Feature 1: Foundation & Authentication
-- User authentication with Express sessions
+- User authentication with JWT tokens
 - Password hashing with bcrypt
 - **Role-based access control (RBAC)** with three user types:
   - **Instructors**: Full admin access to all features
   - **Parents**: Access to their children's information and class booking
   - **Students**: Access to their own classes and messages
-- PostgreSQL database with Drizzle ORM
+- SQLite database with SQLAlchemy ORM
 
 ### ✅ Feature 2: User Management
 - User registration and profiles
@@ -20,10 +20,16 @@ A comprehensive martial arts management system built with modern web technologie
 - User session management
 
 ### ✅ Feature 3: Student Management
-- Student registration and profiles
-- Parent-child relationships
-- Belt level tracking
-- QR code generation for attendance
+- **Comprehensive student registration and profiles**
+- **Enhanced student cards** with parent, dojo, and membership information
+- **Detailed student profiles** including:
+  - Personal information and belt level tracking
+  - Parent and dojo relationship details
+  - Attendance statistics and history
+  - Active class bookings
+  - QR code generation for attendance
+- **Advanced student creation form** with comprehensive data fields
+- **Role-based student access** (parents see only their children)
 
 ### ✅ Feature 4: Class Management
 - Class scheduling and management
@@ -42,6 +48,41 @@ A comprehensive martial arts management system built with modern web technologie
 - Role-based navigation and UI
 - Responsive design with Tailwind CSS
 - Real-time updates with TanStack Query
+
+## 🎓 Enhanced Student Features
+
+The system now includes comprehensive student management capabilities:
+
+### **Student Cards & Profiles**
+- **Rich Student Cards**: Display comprehensive information including parent details, dojo membership, belt level, age, and member since date
+- **Detailed Profiles**: Individual student pages with statistics, attendance history, and relationship information
+- **Visual Enhancements**: Color-coded belt badges, organized information layout, and responsive design
+
+### **Advanced Student Creation**
+- **Comprehensive Form**: Multi-field form including personal information, parent selection, dojo assignment, and martial arts details
+- **Dynamic Dropdowns**: Select from existing parents and dojos in the system
+- **Validation**: Proper form validation and error handling
+
+### **Student Statistics & Analytics**
+- **Attendance Tracking**: Total classes attended and attendance rate calculations
+- **Booking Management**: Active class bookings and scheduling information
+- **Performance Metrics**: Visual statistics cards for quick insights
+
+### **Data Integration**
+- **Cross-Entity Relationships**: Seamless integration between students, parents, dojos, classes, and attendance
+- **Real-time Updates**: Immediate reflection of changes across all related data
+- **Role-based Filtering**: Appropriate data visibility based on user permissions
+
+## 🚀 FastAPI Backend
+
+The system uses a **FastAPI backend** with the following features:
+
+- **Port**: 8000
+- **Authentication**: JWT-based with Python JWT
+- **Language**: Python 3.8+
+- **Status**: Production-ready
+- **Features**: Auto-generated API documentation (Swagger/ReDoc)
+- **Database**: SQLite with SQLAlchemy ORM
 
 ## 🔐 Role-Based Access Control (RBAC)
 
@@ -71,30 +112,22 @@ The system implements comprehensive role-based access control:
 
 The project includes comprehensive testing at multiple levels:
 
-#### **Unit & Integration Tests**
+#### **Python Tests**
 ```bash
-# Run all tests
-npm test
-
-# Run specific test suites
-npm run test:api      # API endpoint tests
-npm run test:storage  # Database storage tests
-npm run test:schema   # Data validation tests
-npm run test:coverage # Tests with coverage report
+# Run FastAPI tests
+cd fastapi_server && python3 -m pytest
 ```
 
 #### **Selenium UI Tests**
 ```bash
 # Run all selenium tests
-npm run test:selenium
+node test-runner.mjs
 
-# List available tests
-npm run test:selenium:list
-
-# Run specific test
-node run-selenium-tests.js login
-node run-selenium-tests.js layout
-node run-selenium-tests.js students
+# Run specific test files
+node selenium-layout-tests.js
+node selenium-classes-tests.js
+node selenium-students-tests.js
+node selenium-attendance-tests.js
 ```
 
 **Available Selenium Tests:**
@@ -117,10 +150,13 @@ Use these pre-configured accounts for testing:
 
 ## 🛠 Technology Stack
 
-- **Backend**: Node.js + Express + TypeScript
-- **Database**: PostgreSQL + Drizzle ORM
-- **Authentication**: Express sessions + bcrypt
-- **Frontend**: React + Next.js + TypeScript
+### **FastAPI Backend**
+- **Backend**: Python + FastAPI + SQLAlchemy
+- **Database**: SQLite + SQLAlchemy ORM
+- **Authentication**: JWT tokens + passlib/bcrypt
+
+### **Frontend**
+- **Framework**: React + Next.js + TypeScript
 - **UI Framework**: Tailwind CSS + shadcn/ui
 - **State Management**: TanStack Query + React Context
 - **Testing**: Jest + Selenium WebDriver
@@ -129,7 +165,7 @@ Use these pre-configured accounts for testing:
 
 ### Prerequisites
 - Node.js 18+
-- PostgreSQL database (Supabase recommended)
+- Python 3.8+
 - Chrome browser (for Selenium tests)
 
 ### Setup
@@ -140,46 +176,28 @@ git clone <repository-url>
 cd ma-template
 npm install
 cd client && npm install
+
+# Install FastAPI dependencies
+cd fastapi_server && pip3 install -r requirements.txt
 ```
 
-2. **Set up database**
-   - Create a [Supabase](https://supabase.com) project
-   - Get your database connection string
-   - Create `.env` file:
-```bash
-DATABASE_URL="postgresql://postgres.xxxxx:[YOUR-PASSWORD]@aws-0-us-west-1.pooler.supabase.com:6543/postgres"
-SESSION_SECRET="your-secret-key"
-```
+2. **Start development servers**
 
-3. **Initialize database**
+**Start FastAPI backend and frontend**
 ```bash
-npm run db:push
-```
+# Terminal 1: FastAPI server
+cd fastapi_server && python3 -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
-4. **Start development servers**
-```bash
-# Terminal 1: Backend server
-npm run dev
-
-# Terminal 2: Frontend server
+# Terminal 2: Frontend
 cd client && npm run dev
-```
-
-5. **Test the setup**
-```bash
-# Health check
-curl http://localhost:5000/api/health
-
-# Run all tests
-npm test
-npm run test:selenium
 ```
 
 ## 📡 API Endpoints
 
+The FastAPI backend provides the following endpoints:
+
 ### Authentication
 - `POST /api/auth/login` - User login
-- `POST /api/auth/logout` - User logout  
 - `GET /api/auth/me` - Get current user
 
 ### Users
@@ -190,23 +208,25 @@ npm run test:selenium
 
 ### Students
 - `GET /api/students` - Get students (filtered by role)
-- `GET /api/students/:id` - Get student by ID
-- `POST /api/students` - Create student
+- `GET /api/students/:id` - Get comprehensive student profile
+- `POST /api/students` - Create student with comprehensive data
 - `PUT /api/students/:id` - Update student
+- `GET /api/students/:id/attendance` - Get student attendance history
 
 ### Classes
 - `GET /api/classes` - Get all classes
 - `POST /api/classes` - Create class (instructor only)
 - `PUT /api/classes/:id` - Update class
-- `POST /api/classes/book/:id` - Book class
-- `DELETE /api/classes/book/:id` - Unbook class
+
+### Bookings
+- `GET /api/bookings` - Get bookings
+- `POST /api/bookings` - Create booking
+- `DELETE /api/bookings/:id` - Delete booking
 
 ### Attendance
+- `GET /api/attendance` - Get attendance records
 - `POST /api/attendance/qr-scan` - QR code check-in
-- `POST /api/attendance/manual` - Manual check-in (instructor only)
-
-### Health Check
-- `GET /api/health` - Server health status
+- `POST /api/attendance/manual` - Manual check-in
 
 ## 🔄 Development Workflow
 
