@@ -37,10 +37,10 @@ async function testStudentsPage(user) {
     await driver.findElement(By.css('button[type="submit"]')).click();
     await sleep(2000);
     
-    // Wait for redirect and verify we're on dashboard (or classes for parents)
+    // Wait for redirect and verify we're on dashboard (or students for parents)
     if (user.role === 'parent') {
-      await driver.wait(until.urlContains('/classes'), 5000);
-      console.log(`✅ ${user.role} login successful, redirected to classes`);
+      await driver.wait(until.urlContains('/students'), 5000);
+      console.log(`✅ ${user.role} login successful, redirected to students`);
     } else {
       await driver.wait(until.urlContains('/dashboard'), 5000);
       console.log(`✅ ${user.role} login successful`);

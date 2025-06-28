@@ -4,7 +4,7 @@ import chrome from 'selenium-webdriver/chrome.js';
 // Test configuration
 const BASE_URL = 'http://localhost:3000';
 const TEST_USERS = {
-  instructor: { username: 'instructor', password: 'instructor12377' },
+  instructor: { username: 'instructor', password: 'password12377' },
   parent: { username: 'parent', password: 'parent12377' }
 };
 
@@ -29,7 +29,15 @@ async function login(driver, userType) {
   // Submit form
   const submitButton = await driver.findElement(By.css('button[type="submit"]'));
   await submitButton.click();
-  // No redirect wait here
+  
+  // Wait for redirect based on user role
+  if (userType === 'instructor') {
+    await driver.wait(until.urlContains('/dashboard'), 5000);
+  } else if (userType === 'parent') {
+    await driver.wait(until.urlContains('/students'), 5000);
+  } else {
+    await driver.wait(until.urlContains('/classes'), 5000);
+  }
 }
 
 async function selectClass(driver) {

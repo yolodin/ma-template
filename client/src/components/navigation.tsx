@@ -6,16 +6,21 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard' },
-  { name: 'Students', href: '/students' },
-  { name: 'Classes', href: '/classes' },
-  { name: 'Attendance', href: '/attendance' },
-  { name: 'Messages', href: '/messages' },
+  { name: 'Dashboard', href: '/dashboard', roles: ['instructor'] },
+  { name: 'Students', href: '/students', roles: ['instructor', 'parent'] },
+  { name: 'Classes', href: '/classes', roles: ['instructor', 'parent', 'student'] },
+  { name: 'Attendance', href: '/attendance', roles: ['instructor'] },
+  { name: 'Messages', href: '/messages', roles: ['instructor', 'parent', 'student'] },
 ];
 
 export function Navigation() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+
+  // Filter navigation items based on user role
+  const visibleNavigation = user ? navigation.filter(item =>
+    item.roles.includes(user.role)
+  ) : [];
 
   return (
     <nav className="bg-white shadow-sm border-b">
@@ -29,17 +34,16 @@ export function Navigation() {
             </div>
             {user && (
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                {navigation.map((item) => {
+                {visibleNavigation.map((item) => {
                   const isActive = pathname === item.href;
                   return (
                     <Link
                       key={item.name}
                       href={item.href}
-                      className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                        isActive
+                      className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${isActive
                           ? 'border-dojo-primary text-dojo-primary'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                      }`}
+                        }`}
                     >
                       {item.name}
                     </Link>
@@ -54,9 +58,9 @@ export function Navigation() {
                 <span className="text-sm text-gray-700">
                   Welcome, {user.firstName}!
                 </span>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={logout}
                   className="text-dojo-danger border-dojo-danger hover:bg-dojo-danger hover:text-white"
                 >
