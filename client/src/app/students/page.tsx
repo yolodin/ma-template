@@ -46,15 +46,34 @@ interface Dojo {
   createdAt: string;
 }
 
+interface StudentBooking {
+  id: number;
+  studentId: number;
+  classId: number;
+  bookedAt: string;
+  isActive: boolean;
+  createdAt: string;
+  className: string;
+  classDescription: string | null;
+  dayOfWeek: string;
+  startTime: string;
+  endTime: string;
+  beltLevelRequired: string;
+}
+
 function StudentsContent() {
   const [students, setStudents] = useState<Student[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [dojos, setDojos] = useState<Dojo[]>([]);
+  const [studentBookings, setStudentBookings] = useState<Record<number, StudentBooking[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [deleting, setDeleting] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<number | null>(null);
   const [formData, setFormData] = useState({
     parentId: 2, // Default to the existing parent
     dojoId: 1,   // Default to the existing dojo
@@ -89,6 +108,19 @@ function StudentsContent() {
           console.log('Could not fetch users data:', userError.message);
           setUsers([]);
         }
+
+        // Fetch bookings for each student
+        const bookingsData: Record<number, StudentBooking[]> = {};
+        for (const student of studentsData) {
+          try {
+            const bookings = await apiClient.get<StudentBooking[]>(`/api/students/${student.id}/bookings`);
+            bookingsData[student.id] = bookings;
+          } catch (bookingError: any) {
+            console.log(`Could not fetch bookings for student ${student.id}:`, bookingError.message);
+            bookingsData[student.id] = [];
+          }
+        }
+        setStudentBookings(bookingsData);
       } catch (err: any) {
         setError(err.message || "Error fetching data");
       } finally {
@@ -129,6 +161,21 @@ function StudentsContent() {
     }
   };
 
+  const handleDeleteStudent = async (studentId: number) => {
+    setDeleting(studentId);
+    setDeleteError("");
+
+    try {
+      await apiClient.delete(`/api/students/${studentId}`);
+      setStudents(prev => prev.filter(student => student.id !== studentId));
+      setDeleteConfirmDialog(null);
+    } catch (err: any) {
+      setDeleteError(err.message || "Error deleting student");
+    } finally {
+      setDeleting(null);
+    }
+  };
+
   const getBeltColor = (beltLevel: string) => {
     const colors: Record<string, string> = {
       white: 'bg-white text-gray-800 border-gray-300',
@@ -164,6 +211,18 @@ function StudentsContent() {
       month: 'short',
       day: 'numeric',
     });
+  };
+
+  const formatTime = (time: string) => {
+    return time;
+  };
+
+  const formatDay = (day: string) => {
+    return day.charAt(0).toUpperCase() + day.slice(1);
+  };
+
+  const getStudentClasses = (studentId: number) => {
+    return studentBookings[studentId] || [];
   };
 
   return (
@@ -270,12 +329,12 @@ function StudentsContent() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="white">White</SelectItem>
-                    <SelectItem value="yellow">Yellow</SelectItem>
-                    <SelectItem value="green">Green</SelectItem>
-                    <SelectItem value="blue">Blue</SelectItem>
-                    <SelectItem value="red">Red</SelectItem>
-                    <SelectItem value="black">Black</SelectItem>
+                    <SelectItem key="white" value="white">White</SelectItem>
+                    <SelectItem key="yellow" value="yellow">Yellow</SelectItem>
+                    <SelectItem key="green" value="green">Green</SelectItem>
+                    <SelectItem key="blue" value="blue">Blue</SelectItem>
+                    <SelectItem key="red" value="red">Red</SelectItem>
+                    <SelectItem key="black" value="black">Black</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -310,7 +369,7 @@ function StudentsContent() {
         {loading && (
           <div className="space-y-2">
             {[1, 2, 3].map(i => (
-              <Skeleton key={i} className="h-32 w-full" />
+              <Skeleton key={`student-skeleton-${i}`} className="h-32 w-full" />
             ))}
           </div>
         )}
@@ -366,13 +425,53 @@ function StudentsContent() {
 
                   <Separator />
 
+                  {/* Enrolled Classes */}
                   <div className="pt-2">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-500">Enrolled Classes</span>
+                      <span className="text-sm font-medium">{getStudentClasses(student.id).length}</span>
+                    </div>
+                    {getStudentClasses(student.id).length > 0 ? (
+                      <div className="space-y-2">
+                        {getStudentClasses(student.id).slice(0, 3).map((booking) => (
+                          <div key={booking.id} className="text-xs bg-blue-50 p-2 rounded">
+                            <div className="font-medium text-blue-900">{booking.className}</div>
+                            <div className="text-blue-700">
+                              {formatDay(booking.dayOfWeek)} • {formatTime(booking.startTime)}-{formatTime(booking.endTime)}
+                            </div>
+                          </div>
+                        ))}
+                        {getStudentClasses(student.id).length > 3 && (
+                          <div className="text-xs text-gray-500 text-center">
+                            +{getStudentClasses(student.id).length - 3} more classes
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-gray-400 text-center py-2">
+                        No classes enrolled
+                      </div>
+                    )}
+                  </div>
+
+                  <Separator />
+
+                  <div className="pt-2 space-y-2">
                     <Button
                       onClick={() => router.push(`/students/${student.id}`)}
                       className="w-full"
                       size="sm"
                     >
                       View Full Profile
+                    </Button>
+                    <Button
+                      onClick={() => setDeleteConfirmDialog(student.id)}
+                      variant="destructive"
+                      className="w-full"
+                      size="sm"
+                      disabled={deleting === student.id}
+                    >
+                      {deleting === student.id ? "Deleting..." : "Delete Student"}
                     </Button>
                   </div>
                 </CardContent>
@@ -381,6 +480,33 @@ function StudentsContent() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmDialog !== null} onOpenChange={() => setDeleteConfirmDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Delete</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p>Are you sure you want to delete this student? This action cannot be undone.</p>
+            {deleteError && (
+              <div className="text-red-600 text-sm">{deleteError}</div>
+            )}
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setDeleteConfirmDialog(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => deleteConfirmDialog && handleDeleteStudent(deleteConfirmDialog)}
+                disabled={deleting !== null}
+              >
+                {deleting ? "Deleting..." : "Delete"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

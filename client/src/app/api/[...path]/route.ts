@@ -11,7 +11,7 @@ export async function GET(
   const queryString = url.searchParams.toString();
   
   try {
-    const response = await fetch(`${BACKEND_URL}/api/${path}?${queryString}`, {
+    const response = await fetch(`${BACKEND_URL}/${path}?${queryString}`, {
       headers: {
         'Content-Type': 'application/json',
         ...Object.fromEntries(request.headers.entries()),
@@ -37,7 +37,7 @@ export async function POST(
   const body = await request.text();
   
   try {
-    const response = await fetch(`${BACKEND_URL}/api/${path}`, {
+    const response = await fetch(`${BACKEND_URL}/${path}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -65,7 +65,7 @@ export async function PUT(
   const body = await request.text();
   
   try {
-    const response = await fetch(`${BACKEND_URL}/api/${path}`, {
+    const response = await fetch(`${BACKEND_URL}/${path}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -92,7 +92,7 @@ export async function DELETE(
   const path = params.path.join('/');
   
   try {
-    const response = await fetch(`${BACKEND_URL}/api/${path}`, {
+    const response = await fetch(`${BACKEND_URL}/${path}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',

@@ -11,7 +11,7 @@ from models import (
     UserCreate, UserUpdate, User as UserModel,
     StudentCreate, StudentUpdate, Student as StudentModel,
     Dojo as DojoModel, ClassCreate, ClassUpdate, Class as ClassModel,
-    BookingCreate, Booking as BookingModel,
+    BookingCreate, Booking as BookingModel, StudentBookingWithClass,
     AttendanceCreate, Attendance as AttendanceModel,
     LoginRequest, LoginResponse, QRCodeScanRequest,
     UserRole, CheckInMethod
@@ -367,6 +367,56 @@ async def update_student(
         createdAt=updated_student.created_at
     )
 
+@router.delete("/students/{student_id}")
+async def delete_student(
+    student_id: int,
+    current_user: User = Depends(require_role([UserRole.INSTRUCTOR, UserRole.PARENT])),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(Student).where(Student.id == student_id))
+    existing_student = result.scalar_one_or_none()
+    
+    if not existing_student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    # Check permissions - parents can only delete their own children
+    if current_user.role == "parent" and existing_student.parent_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Check for related data that might prevent deletion
+    # Check for active bookings
+    result = await db.execute(
+        select(Booking).where(
+            Booking.student_id == student_id,
+            Booking.is_active == True
+        )
+    )
+    active_bookings = result.scalars().all()
+    
+    if active_bookings:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot delete student with {len(active_bookings)} active bookings. Please cancel bookings first."
+        )
+    
+    # Check for attendance records
+    result = await db.execute(
+        select(Attendance).where(Attendance.student_id == student_id)
+    )
+    attendance_records = result.scalars().all()
+    
+    if attendance_records:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot delete student with {len(attendance_records)} attendance records. Attendance history must be preserved."
+        )
+    
+    # Delete the student
+    await db.execute(delete(Student).where(Student.id == student_id))
+    await db.commit()
+    
+    return {"message": "Student deleted successfully"}
+
 # Dojo routes
 @router.get("/dojos", response_model=List[DojoModel])
 async def get_dojos(
@@ -490,13 +540,13 @@ async def create_class(
     cls = Class(
         name=class_data.name,
         description=class_data.description,
-        instructor_id=class_data.instructorId,
-        dojo_id=class_data.dojoId,
-        day_of_week=class_data.dayOfWeek.value,
-        start_time=class_data.startTime,
-        end_time=class_data.endTime,
-        max_capacity=class_data.maxCapacity,
-        belt_level_required=class_data.beltLevelRequired
+        instructor_id=class_data.instructor_id,
+        dojo_id=class_data.dojo_id,
+        day_of_week=class_data.day_of_week.value,
+        start_time=class_data.start_time,
+        end_time=class_data.end_time,
+        max_capacity=class_data.max_capacity,
+        belt_level_required=class_data.belt_level_required
     )
     
     db.add(cls)
@@ -538,22 +588,22 @@ async def update_class(
         update_data["name"] = class_data.name
     if class_data.description is not None:
         update_data["description"] = class_data.description
-    if class_data.instructorId is not None:
-        update_data["instructor_id"] = class_data.instructorId
-    if class_data.dojoId is not None:
-        update_data["dojo_id"] = class_data.dojoId
-    if class_data.dayOfWeek is not None:
-        update_data["day_of_week"] = class_data.dayOfWeek.value
-    if class_data.startTime is not None:
-        update_data["start_time"] = class_data.startTime
-    if class_data.endTime is not None:
-        update_data["end_time"] = class_data.endTime
-    if class_data.maxCapacity is not None:
-        update_data["max_capacity"] = class_data.maxCapacity
-    if class_data.beltLevelRequired is not None:
-        update_data["belt_level_required"] = class_data.beltLevelRequired
-    if class_data.isActive is not None:
-        update_data["is_active"] = class_data.isActive
+    if class_data.instructor_id is not None:
+        update_data["instructor_id"] = class_data.instructor_id
+    if class_data.dojo_id is not None:
+        update_data["dojo_id"] = class_data.dojo_id
+    if class_data.day_of_week is not None:
+        update_data["day_of_week"] = class_data.day_of_week.value
+    if class_data.start_time is not None:
+        update_data["start_time"] = class_data.start_time
+    if class_data.end_time is not None:
+        update_data["end_time"] = class_data.end_time
+    if class_data.max_capacity is not None:
+        update_data["max_capacity"] = class_data.max_capacity
+    if class_data.belt_level_required is not None:
+        update_data["belt_level_required"] = class_data.belt_level_required
+    if class_data.is_active is not None:
+        update_data["is_active"] = class_data.is_active
     
     await db.execute(
         update(Class).where(Class.id == class_id).values(**update_data)
@@ -971,4 +1021,51 @@ async def delete_booking_by_class_and_student(
     await db.execute(delete(Booking).where(Booking.id == booking.id))
     await db.commit()
     
-    return {"message": "Booking deleted successfully"} 
+    return {"message": "Booking deleted successfully"}
+
+@router.get("/students/{student_id}/bookings", response_model=List[StudentBookingWithClass])
+async def get_student_bookings(
+    student_id: int,
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    # Check if student exists
+    result = await db.execute(select(Student).where(Student.id == student_id))
+    student = result.scalar_one_or_none()
+    
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    # Check permissions
+    if current_user.role == "parent" and student.parent_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    elif current_user.role == "student" and student.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get bookings with class details for this student
+    result = await db.execute(
+        select(Booking, Class).join(Class, Booking.class_id == Class.id)
+        .where(
+            Booking.student_id == student_id,
+            Booking.is_active == True
+        ).order_by(Booking.created_at.desc())
+    )
+    booking_class_pairs = result.all()
+    
+    return [
+        StudentBookingWithClass(
+            id=booking.id,
+            student_id=booking.student_id,
+            class_id=booking.class_id,
+            booked_at=booking.booked_at,
+            is_active=booking.is_active,
+            created_at=booking.created_at,
+            class_name=cls.name,
+            class_description=cls.description,
+            day_of_week=cls.day_of_week,
+            start_time=cls.start_time,
+            end_time=cls.end_time,
+            belt_level_required=cls.belt_level_required
+        )
+        for booking, cls in booking_class_pairs
+    ] 

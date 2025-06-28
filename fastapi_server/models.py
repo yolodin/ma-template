@@ -165,6 +165,25 @@ class Booking(BookingBase):
         from_attributes = True
         populate_by_name = True
 
+class StudentBookingWithClass(BaseModel):
+    id: int
+    student_id: int = Field(..., alias="studentId")
+    class_id: int = Field(..., alias="classId")
+    booked_at: datetime = Field(..., alias="bookedAt")
+    is_active: bool = Field(True, alias="isActive")
+    created_at: datetime = Field(..., alias="createdAt")
+    # Class details
+    class_name: str = Field(..., alias="className")
+    class_description: Optional[str] = Field(None, alias="classDescription")
+    day_of_week: str = Field(..., alias="dayOfWeek")
+    start_time: str = Field(..., alias="startTime")
+    end_time: str = Field(..., alias="endTime")
+    belt_level_required: str = Field(..., alias="beltLevelRequired")
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+
 class AttendanceBase(BaseModel):
     student_id: int = Field(..., alias="studentId")
     class_id: int = Field(..., alias="classId")
