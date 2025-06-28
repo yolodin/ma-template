@@ -22,6 +22,13 @@ class DayOfWeek(str, Enum):
     SATURDAY = "saturday"
     SUNDAY = "sunday"
 
+class EnrollmentStatus(str, Enum):
+    ENROLLED = "enrolled"
+    WAITLISTED = "waitlisted"
+    DROPPED = "dropped"
+    COMPLETED = "completed"
+    SUSPENDED = "suspended"
+
 # Base Models
 class UserBase(BaseModel):
     username: str
@@ -233,4 +240,67 @@ class HealthResponse(BaseModel):
 class SessionData(BaseModel):
     user_id: int = Field(..., alias="userId")
     user_role: UserRole = Field(..., alias="userRole")
-    username: str 
+    username: str
+
+class EnrollmentBase(BaseModel):
+    student_id: int = Field(..., alias="studentId")
+    class_id: int = Field(..., alias="classId")
+    status: EnrollmentStatus = Field(EnrollmentStatus.ENROLLED, alias="status")
+    enrolled_by: int = Field(..., alias="enrolledBy")
+    enrollment_date: datetime = Field(..., alias="enrollmentDate")
+    start_date: Optional[datetime] = Field(None, alias="startDate")
+    end_date: Optional[datetime] = Field(None, alias="endDate")
+    notes: Optional[str] = None
+    attendance_count: int = Field(0, alias="attendanceCount")
+    total_sessions: int = Field(0, alias="totalSessions")
+
+    class Config:
+        populate_by_name = True
+
+class EnrollmentCreate(EnrollmentBase):
+    pass
+
+class EnrollmentUpdate(BaseModel):
+    status: Optional[EnrollmentStatus] = Field(None, alias="status")
+    start_date: Optional[datetime] = Field(None, alias="startDate")
+    end_date: Optional[datetime] = Field(None, alias="endDate")
+    notes: Optional[str] = None
+    attendance_count: Optional[int] = Field(None, alias="attendanceCount")
+    total_sessions: Optional[int] = Field(None, alias="totalSessions")
+
+class Enrollment(EnrollmentBase):
+    id: int
+    created_at: datetime = Field(..., alias="createdAt")
+    updated_at: datetime = Field(..., alias="updatedAt")
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True
+
+class EnrollmentWithClassDetails(BaseModel):
+    id: int
+    student_id: int = Field(..., alias="studentId")
+    class_id: int = Field(..., alias="classId")
+    status: EnrollmentStatus = Field(..., alias="status")
+    enrolled_by: int = Field(..., alias="enrolledBy")
+    enrollment_date: datetime = Field(..., alias="enrollmentDate")
+    start_date: Optional[datetime] = Field(None, alias="startDate")
+    end_date: Optional[datetime] = Field(None, alias="endDate")
+    notes: Optional[str] = None
+    attendance_count: int = Field(..., alias="attendanceCount")
+    total_sessions: int = Field(..., alias="totalSessions")
+    created_at: datetime = Field(..., alias="createdAt")
+    updated_at: datetime = Field(..., alias="updatedAt")
+    # Class details
+    class_name: str = Field(..., alias="className")
+    class_description: Optional[str] = Field(None, alias="classDescription")
+    day_of_week: str = Field(..., alias="dayOfWeek")
+    start_time: str = Field(..., alias="startTime")
+    end_time: str = Field(..., alias="endTime")
+    belt_level_required: str = Field(..., alias="beltLevelRequired")
+    instructor_name: str = Field(..., alias="instructorName")
+    dojo_name: str = Field(..., alias="dojoName")
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True 

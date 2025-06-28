@@ -13,7 +13,8 @@ const seleniumTests = [
   { name: 'Students Page Tests', file: 'selenium-students-tests.js' },
   { name: 'Classes Tests', file: 'selenium-classes-tests.js' },
   { name: 'Classes Booking Tests', file: 'selenium-classes-booking-tests.js' },
-  { name: 'Attendance Tests', file: 'selenium-attendance-tests.js' }
+  { name: 'Attendance Tests', file: 'selenium-attendance-tests.js' },
+  { name: 'Enrollment Tests', file: 'selenium-enrollment-tests.js' }
 ];
 
 function runTest(testFile) {

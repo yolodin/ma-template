@@ -53,11 +53,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const fetchUser = async () => {
     try {
-      const userData = await apiClient.getCurrentUser() as { user: User };
-      setUser(userData.user);
+      // Only try to fetch user if we have a token
+      const token = localStorage.getItem('auth-token');
+      if (!token) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      const userData = await apiClient.getCurrentUser() as User;
+      setUser(userData);
     } catch (error) {
-      console.error('Fetch user error:', error);
-      setUser(null);
+      // Don't log authentication errors as they're expected when not logged in
+      if (error instanceof Error && error.message.includes('Authentication required')) {
+        // Silently handle authentication errors
+        setUser(null);
+      } else {
+        console.error('Fetch user error:', error);
+        setUser(null);
+      }
     } finally {
       setLoading(false);
     }

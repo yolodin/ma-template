@@ -129,6 +129,12 @@ The Selenium tests verify:
 - Users cannot access unauthorized pages
 - Role-based access control is enforced
 
+#### 8. Class Access Control Testing
+- **Student Class Visibility**: Students can only see classes they are enrolled in
+- **Enrollment Management**: Only parents and instructors can enroll/drop students
+- **Booking Restrictions**: Students cannot book/unbook classes themselves
+- **Role-based UI**: Appropriate controls shown/hidden based on user role
+
 ### Test Output Example
 
 ```

@@ -84,6 +84,23 @@ class Booking(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
+class Enrollment(Base):
+    __tablename__ = "enrollments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    student_id = Column(Integer, ForeignKey("students.id"), nullable=False)
+    class_id = Column(Integer, ForeignKey("classes.id"), nullable=False)
+    status = Column(String(20), nullable=False, default="enrolled")  # enrolled, waitlisted, dropped, completed, suspended
+    enrolled_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    enrollment_date = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    start_date = Column(DateTime(timezone=True))
+    end_date = Column(DateTime(timezone=True))
+    notes = Column(Text)
+    attendance_count = Column(Integer, default=0)
+    total_sessions = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
 class Attendance(Base):
     __tablename__ = "attendance"
 

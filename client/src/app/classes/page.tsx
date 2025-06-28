@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,9 +12,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/components/toast-provider"
-import { Plus, Calendar, Clock, Users, BookOpen, BookX } from "lucide-react"
+import { Plus, Calendar, Clock, Users, Trash2, CheckCircle, Minus } from "lucide-react"
 import { ProtectedRoute } from '@/components/protected-route'
 import { apiClient } from "@/config/api"
+import { Skeleton } from "@/components/ui/skeleton"
 
 interface Class {
   id: number
@@ -66,29 +67,35 @@ interface Dojo {
 }
 
 const useClasses = () => {
+  const { user, loading } = useAuth()
   return useQuery({
     queryKey: ["classes"],
     queryFn: async (): Promise<Class[]> => {
       return apiClient.get<Class[]>('/api/classes')
     },
+    enabled: !loading && !!user,
   })
 }
 
 const useStudents = () => {
+  const { user, loading } = useAuth()
   return useQuery({
     queryKey: ["students"],
     queryFn: async (): Promise<Student[]> => {
       return apiClient.get<Student[]>('/api/students')
     },
+    enabled: !loading && !!user,
   })
 }
 
 const useDojos = () => {
+  const { user, loading } = useAuth()
   return useQuery({
     queryKey: ["dojos"],
     queryFn: async (): Promise<Dojo[]> => {
       return apiClient.get<Dojo[]>('/api/dojos')
     },
+    enabled: !loading && !!user,
   })
 }
 
@@ -324,45 +331,32 @@ function AddClassDialog() {
 }
 
 function ClassesContent() {
-  const { user } = useAuth()
+  const { user, loading } = useAuth()
   const { addToast } = useToast()
-  const [selectedStudent, setSelectedStudent] = useState<number | null>(null)
-  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<number | null>(null)
+  const [deleteConfirmDialog, setDeleteConfirmDialog] = useState<{ classId: number; className: string } | null>(null)
 
-  const { data: classes, isLoading, error } = useClasses()
-  const { data: students, isLoading: studentsLoading } = useStudents()
+  const { data: classes, isLoading: classesLoading, error } = useClasses()
+  const { data: students } = useStudents()
+  const deleteClass = useDeleteClass()
   const bookClass = useBookClass()
   const unbookClass = useUnbookClass()
-  const deleteClass = useDeleteClass()
-
-  const isStaff = user?.role === "instructor"
-  const canBook = user?.role === "student" || user?.role === "parent"
-
-  // Debug: Log classes data to see if there are duplicates
-  console.log('Classes data:', classes)
-
-  // Remove duplicates based on class ID to prevent React key conflicts
-  const uniqueClasses = classes ? classes.filter((cls, index, self) =>
-    index === self.findIndex(c => c.id === cls.id)
-  ) : []
-
-  console.log('Unique classes:', uniqueClasses)
-
-  // Auto-set student ID for students
-  useEffect(() => {
-    if (user?.role === "student" && students) {
-      const studentRecord = students.find(student => student.userId === user.id)
-      if (studentRecord) {
-        setSelectedStudent(studentRecord.id)
-      }
-    }
-  }, [user, students])
 
   const handleBookClass = async (classId: number) => {
-    if (!selectedStudent) return
+    // Only allow instructors and parents to book classes
+    if (user?.role === 'student') {
+      addToast("Students cannot book classes. Please ask your parent or instructor for help.", "error")
+      return
+    }
+
+    const selectedStudentId = getSelectedStudentId()
+    if (!selectedStudentId) {
+      addToast("Please select a student first", "error")
+      return
+    }
+
     try {
-      await bookClass.mutateAsync({ classId, studentId: selectedStudent })
-      addToast("Class booked successfully!", "success")
+      await bookClass.mutateAsync({ classId, studentId: selectedStudentId })
+      addToast("Successfully booked class!", "success")
     } catch (error: any) {
       console.error("Failed to book class:", error)
       addToast(error.message || "Failed to book class", "error")
@@ -370,13 +364,24 @@ function ClassesContent() {
   }
 
   const handleUnbookClass = async (classId: number) => {
-    if (!selectedStudent) return
+    // Only allow instructors and parents to unbook classes
+    if (user?.role === 'student') {
+      addToast("Students cannot unbook classes. Please ask your parent or instructor for help.", "error")
+      return
+    }
+
+    const selectedStudentId = getSelectedStudentId()
+    if (!selectedStudentId) {
+      addToast("Please select a student first", "error")
+      return
+    }
+
     try {
-      await unbookClass.mutateAsync({ classId, studentId: selectedStudent })
-      addToast("Booking cancelled successfully!", "success")
+      await unbookClass.mutateAsync({ classId, studentId: selectedStudentId })
+      addToast("Successfully unbooked class!", "success")
     } catch (error: any) {
       console.error("Failed to unbook class:", error)
-      addToast(error.message || "Failed to cancel booking", "error")
+      addToast(error.message || "Failed to unbook class", "error")
     }
   }
 
@@ -384,6 +389,7 @@ function ClassesContent() {
     try {
       await deleteClass.mutateAsync(classId)
       addToast("Class deleted successfully!", "success")
+      setDeleteConfirmDialog(null)
     } catch (error: any) {
       console.error("Failed to delete class:", error)
       addToast(error.message || "Failed to delete class", "error")
@@ -392,39 +398,56 @@ function ClassesContent() {
 
   const getAvailableStudents = () => {
     if (!students) return []
-    if (user?.role === "student") {
-      return students.filter(student => student.userId === user.id)
-    }
     if (user?.role === "parent") {
       return students.filter(student => student.parentId === user.id)
     }
-    return []
+    return students
   }
 
   const formatTime = (time: string) => {
-    return time
+    return new Date(`1970-01-01T${time}`).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
   }
 
   const formatDay = (day: string) => {
     return day.charAt(0).toUpperCase() + day.slice(1)
   }
 
-  if (isLoading) {
+  const getSelectedStudentId = () => {
+    if (user?.role === "student") {
+      // For students, find their own student record
+      const studentRecord = students?.find(student => student.userId === user.id)
+      return studentRecord?.id
+    }
+
+    // For instructors and parents, we'd need to implement student selection
+    // For now, just return the first available student
+    const availableStudents = getAvailableStudents()
+    return availableStudents[0]?.id
+  }
+
+  if (loading || classesLoading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold">Classes</h1>
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-4 w-64 mt-2" />
+          </div>
+          <Skeleton className="h-10 w-24" />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
-            <Card key={`class-skeleton-${i}`} className="animate-pulse">
+            <Card key={i}>
               <CardHeader>
-                <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-                <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-4 w-full" />
               </CardHeader>
               <CardContent>
-                <div className="h-3 bg-gray-200 rounded w-full mb-2"></div>
-                <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-4 w-1/3" />
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -435,141 +458,173 @@ function ClassesContent() {
 
   if (error) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold mb-4">Classes</h1>
-          <p className="text-red-500">Failed to load classes. Please try again.</p>
-        </div>
+      <div className="text-center py-12">
+        <h3 className="text-lg font-semibold text-red-600 mb-2">Error Loading Classes</h3>
+        <p className="text-gray-600">{error.message}</p>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="text-center py-12">
+        <h3 className="text-lg font-semibold text-gray-600 mb-2">Please log in to view classes</h3>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">Classes</h1>
-        {isStaff && <AddClassDialog />}
-      </div>
-
-      {canBook && students && user?.role !== "student" && (
-        <div className="mb-6">
-          <Label htmlFor="student-select" className="text-sm font-medium">
-            Select Student
-          </Label>
-          <Select value={selectedStudent?.toString() || ""} onValueChange={(value) => setSelectedStudent(parseInt(value))}>
-            <SelectTrigger data-testid="student-select-trigger" className="w-full max-w-xs">
-              <SelectValue placeholder="Choose a student" />
-            </SelectTrigger>
-            <SelectContent>
-              {getAvailableStudents().map((student) => (
-                <SelectItem key={student.id} value={student.id.toString()}>
-                  Student #{student.id} ({student.beltLevel} belt)
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Classes</h1>
+          <p className="text-muted-foreground">
+            {user.role === 'student'
+              ? "View the classes you're enrolled in"
+              : user.role === 'parent'
+                ? "Manage your children's class enrollment"
+                : "Manage all dojo classes"
+            }
+          </p>
         </div>
-      )}
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {uniqueClasses.map((cls, index) => (
-          <Card key={`class-${cls.id}-${index}`} className="hover:shadow-lg transition-shadow" data-testid="class-card">
-            <CardHeader>
-              <div className="flex items-start justify-between">
-                <div>
-                  <CardTitle className="text-lg" data-testid="class-name">{cls.name}</CardTitle>
-                  <CardDescription className="mt-1">
-                    {cls.description || "No description available"}
-                  </CardDescription>
-                </div>
-                <Badge variant={cls.isActive ? "default" : "secondary"}>
-                  {cls.isActive ? "Active" : "Inactive"}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                <div className="flex items-center text-sm text-muted-foreground" data-testid="class-schedule">
-                  <Calendar className="w-4 h-4 mr-2" />
-                  {formatDay(cls.dayOfWeek)}
-                </div>
-                <div className="flex items-center text-sm text-muted-foreground" data-testid="class-time">
-                  <Clock className="w-4 h-4 mr-2" />
-                  {formatTime(cls.startTime)} - {formatTime(cls.endTime)}
-                </div>
-                <div className="flex items-center text-sm text-muted-foreground" data-testid="class-enrollment">
-                  <Users className="w-4 h-4 mr-2" />
-                  {cls.currentEnrollment}/{cls.maxCapacity} enrolled
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" data-testid="class-belt-level">{cls.beltLevelRequired} belt required</Badge>
-                </div>
-
-                {(canBook && selectedStudent) || (user?.role === "student" && students) ? (
-                  <div className="flex gap-2 mt-4">
-                    <Button
-                      size="sm"
-                      onClick={() => handleBookClass(cls.id)}
-                      disabled={bookClass.isPending || cls.currentEnrollment >= cls.maxCapacity}
-                      className="flex-1"
-                    >
-                      <BookOpen className="w-4 h-4 mr-1" />
-                      Book
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleUnbookClass(cls.id)}
-                      disabled={unbookClass.isPending}
-                      className="flex-1"
-                    >
-                      <BookX className="w-4 h-4 mr-1" />
-                      Unbook
-                    </Button>
-                  </div>
-                ) : null}
-
-                {isStaff && (
-                  <div className="mt-4">
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => setDeleteConfirmDialog(cls.id)}
-                      disabled={deleteClass.isPending}
-                      className="w-full"
-                    >
-                      {deleteClass.isPending ? "Deleting..." : "Delete Class"}
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+        {user.role === "instructor" && <AddClassDialog />}
       </div>
 
-      {uniqueClasses.length === 0 && (
+      {!classes || classes.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-muted-foreground">No classes available.</p>
+          <h3 className="text-lg font-semibold text-gray-600 mb-2">
+            {user.role === 'student'
+              ? "No Classes Enrolled"
+              : "No Classes Available"
+            }
+          </h3>
+          <p className="text-gray-500">
+            {user.role === 'student'
+              ? "You are not currently enrolled in any classes. Ask your parent or instructor about enrollment."
+              : user.role === 'parent'
+                ? "No classes are available for enrollment at this time."
+                : "Create your first class to get started."
+            }
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {classes.map((cls) => (
+            <Card key={cls.id} className="hover:shadow-md transition-shadow">
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-xl">{cls.name}</CardTitle>
+                    {cls.description && (
+                      <CardDescription className="mt-1">
+                        {cls.description}
+                      </CardDescription>
+                    )}
+                  </div>
+                  {user.role === "instructor" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => setDeleteConfirmDialog({ classId: cls.id, className: cls.name })}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Calendar className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm">{formatDay(cls.dayOfWeek)}</span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Clock className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm">
+                      {formatTime(cls.startTime)} - {formatTime(cls.endTime)}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Users className="w-4 h-4 text-gray-500" />
+                    <span className="text-sm">
+                      {cls.currentEnrollment}/{cls.maxCapacity} enrolled
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge variant="outline" className="text-xs">
+                      {cls.beltLevelRequired} belt+
+                    </Badge>
+                  </div>
+
+                  {/* Only show booking controls for instructors and parents */}
+                  {user.role !== 'student' && (
+                    <div className="pt-4 border-t">
+                      <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => handleBookClass(cls.id)}
+                          disabled={bookClass.isPending}
+                        >
+                          <Plus className="w-4 h-4 mr-1" />
+                          Book
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => handleUnbookClass(cls.id)}
+                          disabled={unbookClass.isPending}
+                        >
+                          <Minus className="w-4 h-4 mr-1" />
+                          Unbook
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show enrollment status for students */}
+                  {user.role === 'student' && (
+                    <div className="pt-4 border-t">
+                      <div className="flex items-center justify-center">
+                        <Badge variant="secondary" className="text-green-700 bg-green-100">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Enrolled
+                        </Badge>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteConfirmDialog !== null} onOpenChange={() => setDeleteConfirmDialog(null)}>
+      {/* Delete confirmation dialog */}
+      <Dialog
+        open={!!deleteConfirmDialog}
+        onOpenChange={(open) => !open && setDeleteConfirmDialog(null)}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Confirm Delete</DialogTitle>
+            <DialogTitle>Delete Class</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this class? This action cannot be undone.
+              Are you sure you want to delete "{deleteConfirmDialog?.className}"? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteConfirmDialog(null)}>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirmDialog(null)}
+            >
               Cancel
             </Button>
             <Button
               variant="destructive"
-              onClick={() => deleteConfirmDialog && handleDeleteClass(deleteConfirmDialog)}
+              onClick={() => deleteConfirmDialog && handleDeleteClass(deleteConfirmDialog.classId)}
               disabled={deleteClass.isPending}
             >
               {deleteClass.isPending ? "Deleting..." : "Delete"}

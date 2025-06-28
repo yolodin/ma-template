@@ -133,17 +133,18 @@ The server automatically seeds these test users:
 ### Instructor
 - Full access to all endpoints
 - Can manage users, students, classes, and attendance
-- Can create and manage bookings
+- Can create and manage bookings and enrollments
 
 ### Parent
 - Can view and manage their own children
-- Can book classes for their children
+- Can enroll/drop their children from classes
 - Can view attendance for their children
 - Cannot access other users' data
 
 ### Student
-- Can view their own profile and bookings
-- Can view their own attendance records
+- Can view only classes they are enrolled in
+- Can view their own profile and attendance records
+- Cannot book/unbook classes (enrollment managed by parents/instructors)
 - Cannot access other users' data
 
 ## Development
@@ -279,56 +280,4 @@ Tests are configured in `pytest.ini` with:
 ### Attendance
 - `GET /api/attendance` - List attendance records
 - `POST /api/attendance/qr-scan` - QR code check-in
-- `POST /api/attendance/manual` - Manual check-in (instructors only)
-
-### Dojos
-- `GET /api/dojos` - List dojos
-- `GET /api/dojos/{id}` - Get dojo details
-
-## Database
-
-The application uses SQLite with SQLAlchemy ORM. The database is automatically initialized on startup with:
-
-- Sample users (instructor, parent, student)
-- Sample dojo
-- Sample students
-- Sample classes
-
-## Development
-
-### Project Structure
-
-```
-fastapi_server/
-├── main.py              # FastAPI application entry point
-├── routes.py            # API route definitions
-├── models.py            # Pydantic models and validation
-├── database.py          # Database models and connection
-├── auth.py              # Authentication and authorization
-├── tests/               # Test suite
-│   └── test_api.py      # API integration tests
-├── requirements.txt     # Python dependencies
-├── pytest.ini          # Test configuration
-└── README.md           # This file
-```
-
-### Adding New Tests
-
-To add new tests:
-
-1. Create test functions in `tests/test_api.py`
-2. Use the `TestClient` from FastAPI for HTTP testing
-3. Follow the naming convention: `test_*`
-4. Use proper assertions and error handling
-
-Example:
-```python
-def test_new_endpoint():
-    response = client.get("/api/new-endpoint")
-    assert response.status_code == 200
-    assert "expected_data" in response.json()
-```
-
-## License
-
-This project is part of the YOLO Dojo management system. 
+- `POST /api/attendance/manual`

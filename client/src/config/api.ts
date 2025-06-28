@@ -63,7 +63,27 @@ export class APIClient {
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      const errorMessage = errorData.detail || errorData.message || `HTTP error! status: ${response.status}`;
+      
+      // Only log detailed error information for unexpected errors
+      // Don't spam console with expected authentication failures
+      if (response.status !== 401 && response.status !== 403) {
+        console.error(`API Error for ${url}:`, { 
+          status: response.status, 
+          statusText: response.statusText,
+          errorData, 
+          url 
+        });
+      }
+      
+      // Provide more specific error messages
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(`Authentication required: ${errorMessage}`);
+      } else if (response.status === 404) {
+        throw new Error(`API endpoint not found: ${url}`);
+      } else {
+        throw new Error(`${errorMessage} (${response.status})`);
+      }
     }
 
     return response.json();

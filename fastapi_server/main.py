@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 import uvicorn
 import os
 from dotenv import load_dotenv
@@ -101,8 +101,8 @@ async def health_check():
 async def not_found_handler(request: Request, exc):
     """Handle 404 errors"""
     if request.url.path.startswith("/api/"):
-        return {"message": "API endpoint not found"}
-    return {"message": "Not found"}
+        return JSONResponse(status_code=404, content={"message": "API endpoint not found"})
+    return JSONResponse(status_code=404, content={"message": "Not found"})
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8000))

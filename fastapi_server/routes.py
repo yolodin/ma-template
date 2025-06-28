@@ -6,19 +6,25 @@ from datetime import datetime, timedelta
 import re
 import time
 
-from database import get_db, User, Student, Dojo, Class, Booking, Attendance
+from database import get_db, User, Student, Dojo, Class, Booking, Attendance, Enrollment
 from models import (
     UserCreate, UserUpdate, User as UserModel,
     StudentCreate, StudentUpdate, Student as StudentModel,
     Dojo as DojoModel, ClassCreate, ClassUpdate, Class as ClassModel,
     BookingCreate, Booking as BookingModel, StudentBookingWithClass,
+    EnrollmentCreate, EnrollmentUpdate, Enrollment as EnrollmentModel, EnrollmentWithClassDetails,
     AttendanceCreate, Attendance as AttendanceModel,
     LoginRequest, LoginResponse, QRCodeScanRequest,
-    UserRole, CheckInMethod
+    UserRole, CheckInMethod, EnrollmentStatus, HealthResponse
 )
 from auth import require_auth, require_role, create_access_token, verify_password, get_password_hash
 
 router = APIRouter()
+
+# Health check endpoint
+@router.get("/health", response_model=HealthResponse)
+async def health_check():
+    return HealthResponse()
 
 # Authentication routes
 @router.post("/auth/login", response_model=LoginResponse)
@@ -472,15 +478,17 @@ async def get_classes(
     elif current_user.role == "parent":
         # Parents can see classes at their children's dojo
         result = await db.execute(
-            select(Class).join(Student, Class.dojo_id == Student.dojo_id)
+            select(Class).distinct().join(Student, Class.dojo_id == Student.dojo_id)
             .where(Student.parent_id == current_user.id)
         )
         classes = result.scalars().all()
     else:
-        # Students can see classes at their dojo
+        # Students can only see classes they are enrolled in
         result = await db.execute(
-            select(Class).join(Student, Class.dojo_id == Student.dojo_id)
+            select(Class).join(Enrollment, Class.id == Enrollment.class_id)
+            .join(Student, Enrollment.student_id == Student.id)
             .where(Student.user_id == current_user.id)
+            .where(Enrollment.status == "enrolled")
         )
         classes = result.scalars().all()
     
@@ -1068,4 +1076,318 @@ async def get_student_bookings(
             belt_level_required=cls.belt_level_required
         )
         for booking, cls in booking_class_pairs
-    ] 
+    ]
+
+# Enrollment routes
+@router.get("/enrollments", response_model=List[EnrollmentWithClassDetails])
+async def get_enrollments(
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role == "instructor":
+        # Instructors can see all enrollments
+        result = await db.execute(
+            select(Enrollment, Class, User, Dojo)
+            .join(Class, Enrollment.class_id == Class.id)
+            .join(User, Class.instructor_id == User.id)
+            .join(Dojo, Class.dojo_id == Dojo.id)
+            .order_by(Enrollment.created_at.desc())
+        )
+        enrollment_data = result.all()
+    elif current_user.role == "parent":
+        # Parents can see enrollments for their children
+        result = await db.execute(
+            select(Enrollment, Class, User, Dojo)
+            .join(Class, Enrollment.class_id == Class.id)
+            .join(User, Class.instructor_id == User.id)
+            .join(Dojo, Class.dojo_id == Dojo.id)
+            .join(Student, Enrollment.student_id == Student.id)
+            .where(Student.parent_id == current_user.id)
+            .order_by(Enrollment.created_at.desc())
+        )
+        enrollment_data = result.all()
+    else:
+        # Students can see their own enrollments
+        result = await db.execute(
+            select(Enrollment, Class, User, Dojo)
+            .join(Class, Enrollment.class_id == Class.id)
+            .join(User, Class.instructor_id == User.id)
+            .join(Dojo, Class.dojo_id == Dojo.id)
+            .join(Student, Enrollment.student_id == Student.id)
+            .where(Student.user_id == current_user.id)
+            .order_by(Enrollment.created_at.desc())
+        )
+        enrollment_data = result.all()
+    
+    return [
+        EnrollmentWithClassDetails(
+            id=enrollment.id,
+            studentId=enrollment.student_id,
+            classId=enrollment.class_id,
+            status=EnrollmentStatus(enrollment.status),
+            enrolledBy=enrollment.enrolled_by,
+            enrollmentDate=enrollment.enrollment_date,
+            startDate=enrollment.start_date,
+            endDate=enrollment.end_date,
+            notes=enrollment.notes,
+            attendanceCount=enrollment.attendance_count,
+            totalSessions=enrollment.total_sessions,
+            createdAt=enrollment.created_at,
+            updatedAt=enrollment.updated_at,
+            className=cls.name,
+            classDescription=cls.description,
+            dayOfWeek=cls.day_of_week,
+            startTime=cls.start_time,
+            endTime=cls.end_time,
+            beltLevelRequired=cls.belt_level_required,
+            instructorName=f"{instructor.first_name} {instructor.last_name}",
+            dojoName=dojo.name
+        )
+        for enrollment, cls, instructor, dojo in enrollment_data
+    ]
+
+@router.get("/students/{student_id}/enrollments", response_model=List[EnrollmentWithClassDetails])
+async def get_student_enrollments(
+    student_id: int,
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    # Check if student exists
+    result = await db.execute(select(Student).where(Student.id == student_id))
+    student = result.scalar_one_or_none()
+    
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    # Check permissions
+    if current_user.role == "parent" and student.parent_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    elif current_user.role == "student" and student.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Get enrollments for this student
+    result = await db.execute(
+        select(Enrollment, Class, User, Dojo)
+        .join(Class, Enrollment.class_id == Class.id)
+        .join(User, Class.instructor_id == User.id)
+        .join(Dojo, Class.dojo_id == Dojo.id)
+        .where(Enrollment.student_id == student_id)
+        .order_by(Enrollment.created_at.desc())
+    )
+    enrollment_data = result.all()
+    
+    return [
+        EnrollmentWithClassDetails(
+            id=enrollment.id,
+            studentId=enrollment.student_id,
+            classId=enrollment.class_id,
+            status=EnrollmentStatus(enrollment.status),
+            enrolledBy=enrollment.enrolled_by,
+            enrollmentDate=enrollment.enrollment_date,
+            startDate=enrollment.start_date,
+            endDate=enrollment.end_date,
+            notes=enrollment.notes,
+            attendanceCount=enrollment.attendance_count,
+            totalSessions=enrollment.total_sessions,
+            createdAt=enrollment.created_at,
+            updatedAt=enrollment.updated_at,
+            className=cls.name,
+            classDescription=cls.description,
+            dayOfWeek=cls.day_of_week,
+            startTime=cls.start_time,
+            endTime=cls.end_time,
+            beltLevelRequired=cls.belt_level_required,
+            instructorName=f"{instructor.first_name} {instructor.last_name}",
+            dojoName=dojo.name
+        )
+        for enrollment, cls, instructor, dojo in enrollment_data
+    ]
+
+@router.post("/enrollments", response_model=EnrollmentModel)
+async def create_enrollment(
+    enrollment_data: EnrollmentCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_auth)
+):
+    """Create a new enrollment"""
+    # Check if student exists
+    result = await db.execute(select(Student).where(Student.id == enrollment_data.student_id))
+    student = result.scalar_one_or_none()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+    
+    # Check if class exists
+    result = await db.execute(select(Class).where(Class.id == enrollment_data.class_id))
+    class_obj = result.scalar_one_or_none()
+    if not class_obj:
+        raise HTTPException(status_code=404, detail="Class not found")
+    
+    # Check if enrollment already exists
+    result = await db.execute(
+        select(Enrollment).where(
+            Enrollment.student_id == enrollment_data.student_id,
+            Enrollment.class_id == enrollment_data.class_id,
+            Enrollment.status.in_(["enrolled", "waitlisted"])
+        )
+    )
+    existing_enrollment = result.scalar_one_or_none()
+    if existing_enrollment:
+        raise HTTPException(status_code=400, detail="Student is already enrolled in this class")
+    
+    # Check class capacity and set status
+    if enrollment_data.status == EnrollmentStatus.ENROLLED:
+        result = await db.execute(
+            select(Enrollment).where(
+                Enrollment.class_id == enrollment_data.class_id,
+                Enrollment.status == EnrollmentStatus.ENROLLED
+            )
+        )
+        enrolled_count = len(result.scalars().all())
+        if enrolled_count >= class_obj.max_capacity:
+            enrollment_data.status = EnrollmentStatus.WAITLISTED
+    
+    # Create enrollment
+    enrollment = Enrollment(
+        student_id=enrollment_data.student_id,
+        class_id=enrollment_data.class_id,
+        status=enrollment_data.status,
+        enrolled_by=enrollment_data.enrolled_by,
+        enrollment_date=enrollment_data.enrollment_date,
+        start_date=enrollment_data.start_date,
+        end_date=enrollment_data.end_date,
+        notes=enrollment_data.notes,
+        attendance_count=enrollment_data.attendance_count,
+        total_sessions=enrollment_data.total_sessions
+    )
+    
+    db.add(enrollment)
+    
+    # Update class enrollment count if status is enrolled
+    if enrollment_data.status == EnrollmentStatus.ENROLLED:
+        await db.execute(
+            update(Class).where(Class.id == class_obj.id)
+            .values(current_enrollment=class_obj.current_enrollment + 1)
+        )
+    
+    await db.commit()
+    await db.refresh(enrollment)
+    
+    return enrollment
+
+@router.put("/enrollments/{enrollment_id}", response_model=EnrollmentModel)
+async def update_enrollment(
+    enrollment_id: int,
+    enrollment_data: EnrollmentUpdate,
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(Enrollment).where(Enrollment.id == enrollment_id))
+    enrollment = result.scalar_one_or_none()
+    
+    if not enrollment:
+        raise HTTPException(status_code=404, detail="Enrollment not found")
+    
+    # Check permissions
+    result = await db.execute(select(Student).where(Student.id == enrollment.student_id))
+    student = result.scalar_one_or_none()
+    
+    if (current_user.role == "parent" and student.parent_id != current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Track status change for class occupancy updates
+    old_status = enrollment.status
+    new_status = enrollment_data.status.value if enrollment_data.status is not None else old_status
+    
+    # Update fields
+    update_data = {}
+    if enrollment_data.status is not None:
+        update_data["status"] = enrollment_data.status.value
+    if enrollment_data.start_date is not None:
+        update_data["start_date"] = enrollment_data.start_date
+    if enrollment_data.end_date is not None:
+        update_data["end_date"] = enrollment_data.end_date
+    if enrollment_data.notes is not None:
+        update_data["notes"] = enrollment_data.notes
+    if enrollment_data.attendance_count is not None:
+        update_data["attendance_count"] = enrollment_data.attendance_count
+    if enrollment_data.total_sessions is not None:
+        update_data["total_sessions"] = enrollment_data.total_sessions
+    
+    await db.execute(
+        update(Enrollment).where(Enrollment.id == enrollment_id).values(**update_data)
+    )
+    
+    # Update class enrollment count if status changed
+    if old_status != new_status:
+        result = await db.execute(select(Class).where(Class.id == enrollment.class_id))
+        cls = result.scalar_one()
+        
+        if old_status == "enrolled" and new_status != "enrolled":
+            # Student was enrolled, now not enrolled - decrease count
+            await db.execute(
+                update(Class).where(Class.id == cls.id)
+                .values(current_enrollment=max(0, cls.current_enrollment - 1))
+            )
+        elif old_status != "enrolled" and new_status == "enrolled":
+            # Student was not enrolled, now enrolled - increase count
+            await db.execute(
+                update(Class).where(Class.id == cls.id)
+                .values(current_enrollment=cls.current_enrollment + 1)
+            )
+    
+    await db.commit()
+    
+    # Get updated enrollment
+    result = await db.execute(select(Enrollment).where(Enrollment.id == enrollment_id))
+    updated_enrollment = result.scalar_one()
+    
+    return EnrollmentModel(
+        id=updated_enrollment.id,
+        studentId=updated_enrollment.student_id,
+        classId=updated_enrollment.class_id,
+        status=EnrollmentStatus(updated_enrollment.status),
+        enrolledBy=updated_enrollment.enrolled_by,
+        enrollmentDate=updated_enrollment.enrollment_date,
+        startDate=updated_enrollment.start_date,
+        endDate=updated_enrollment.end_date,
+        notes=updated_enrollment.notes,
+        attendanceCount=updated_enrollment.attendance_count,
+        totalSessions=updated_enrollment.total_sessions,
+        createdAt=updated_enrollment.created_at,
+        updatedAt=updated_enrollment.updated_at
+    )
+
+@router.delete("/enrollments/{enrollment_id}")
+async def delete_enrollment(
+    enrollment_id: int,
+    current_user: User = Depends(require_auth),
+    db: AsyncSession = Depends(get_db)
+):
+    result = await db.execute(select(Enrollment).where(Enrollment.id == enrollment_id))
+    enrollment = result.scalar_one_or_none()
+    
+    if not enrollment:
+        raise HTTPException(status_code=404, detail="Enrollment not found")
+    
+    # Check permissions
+    result = await db.execute(select(Student).where(Student.id == enrollment.student_id))
+    student = result.scalar_one_or_none()
+    
+    if (current_user.role == "parent" and student.parent_id != current_user.id):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    # Update class enrollment count if status was enrolled
+    if enrollment.status == "enrolled":
+        result = await db.execute(select(Class).where(Class.id == enrollment.class_id))
+        cls = result.scalar_one()
+        
+        await db.execute(
+            update(Class).where(Class.id == cls.id)
+            .values(current_enrollment=max(0, cls.current_enrollment - 1))
+        )
+    
+    # Delete enrollment
+    await db.execute(delete(Enrollment).where(Enrollment.id == enrollment_id))
+    await db.commit()
+    
+    return {"message": "Enrollment deleted successfully"} 

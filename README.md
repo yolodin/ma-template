@@ -35,7 +35,8 @@ A comprehensive martial arts management system built with modern web technologie
 - Class scheduling and management
 - Instructor assignments
 - Capacity management
-- Class booking system for parents/students
+- **Enrollment-based class access**: Students see only enrolled classes
+- **Role-based booking**: Only parents and instructors can manage enrollments
 
 ### ✅ Feature 5: Attendance Tracking
 - QR code-based check-ins
@@ -91,20 +92,23 @@ The system implements comprehensive role-based access control:
 ### **Instructors** 🥋
 - **Dashboard**: Full admin view with statistics
 - **Students**: Manage all students in the dojo
-- **Classes**: Create, edit, and manage all classes
+- **Classes**: Create, edit, delete, and manage all classes
+- **Enrollment**: Can enroll/drop any student from any class
 - **Attendance**: Track attendance and manage check-ins
 - **Messages**: Send and receive messages
 
 ### **Parents** 👨‍👩‍👧‍👦
 - **Students**: View and manage their own children only
-- **Classes**: Book/unbook classes for their children
+- **Classes**: View all classes at their children's dojo and manage enrollment
+- **Enrollment**: Can enroll/drop their children from classes
 - **Messages**: Send and receive messages
 - **No Access**: Dashboard, attendance tracking, or other students' data
 
 ### **Students** 👦👧
-- **Classes**: View available classes and book/unbook
+- **Classes**: View only classes they are enrolled in (no booking/unbooking)
 - **Messages**: Send and receive messages
-- **No Access**: Dashboard, student management, or attendance tracking
+- **No Access**: Dashboard, student management, attendance tracking, or class booking
+- **Enrollment**: Only parents and instructors can enroll/drop students from classes
 
 ## 🧪 Testing
 
@@ -214,19 +218,26 @@ The FastAPI backend provides the following endpoints:
 - `GET /api/students/:id/attendance` - Get student attendance history
 
 ### Classes
-- `GET /api/classes` - Get all classes
+- `GET /api/classes` - Get classes (filtered by role: all for instructors, dojo classes for parents, enrolled classes for students)
 - `POST /api/classes` - Create class (instructor only)
-- `PUT /api/classes/:id` - Update class
+- `PUT /api/classes/:id` - Update class (instructor only)
+- `DELETE /api/classes/:id` - Delete class (instructor only)
 
 ### Bookings
-- `GET /api/bookings` - Get bookings
-- `POST /api/bookings` - Create booking
-- `DELETE /api/bookings/:id` - Delete booking
+- `GET /api/bookings` - Get bookings (filtered by role)
+- `POST /api/bookings` - Create booking (parents/instructors only)
+- `DELETE /api/bookings/:id` - Delete booking (parents/instructors only)
+
+### Enrollments
+- `GET /api/enrollments` - Get enrollments (filtered by role)
+- `POST /api/enrollments` - Create enrollment (parents/instructors only)
+- `PUT /api/enrollments/:id` - Update enrollment (parents/instructors only)
+- `DELETE /api/enrollments/:id` - Delete enrollment (parents/instructors only)
 
 ### Attendance
-- `GET /api/attendance` - Get attendance records
+- `GET /api/attendance` - Get attendance records (filtered by role)
 - `POST /api/attendance/qr-scan` - QR code check-in
-- `POST /api/attendance/manual` - Manual check-in
+- `POST /api/attendance/manual` - Manual check-in (instructors only)
 
 ## 🔄 Development Workflow
 
@@ -240,7 +251,7 @@ The FastAPI backend provides the following endpoints:
 - ✅ **Authentication & RBAC**: Complete
 - ✅ **User Management**: Complete
 - ✅ **Student Management**: Complete
-- ✅ **Class Management**: Complete
+- ✅ **Class Management**: Complete with enrollment-based access
 - ✅ **Attendance Tracking**: Complete
 - ✅ **Frontend Application**: Complete
 - ✅ **Testing Suite**: Complete
@@ -257,4 +268,3 @@ The FastAPI backend provides the following endpoints:
 ## 📝 License
 
 MIT License - see LICENSE file for details
-

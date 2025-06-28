@@ -46,26 +46,35 @@ interface Dojo {
   createdAt: string;
 }
 
-interface StudentBooking {
+interface StudentEnrollment {
   id: number;
   studentId: number;
   classId: number;
-  bookedAt: string;
-  isActive: boolean;
+  status: string;
+  enrolledBy: number;
+  enrollmentDate: string;
+  startDate: string | null;
+  endDate: string | null;
+  notes: string | null;
+  attendanceCount: number;
+  totalSessions: number;
   createdAt: string;
+  updatedAt: string;
   className: string;
   classDescription: string | null;
   dayOfWeek: string;
   startTime: string;
   endTime: string;
   beltLevelRequired: string;
+  instructorName: string;
+  dojoName: string;
 }
 
 function StudentsContent() {
   const [students, setStudents] = useState<Student[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [dojos, setDojos] = useState<Dojo[]>([]);
-  const [studentBookings, setStudentBookings] = useState<Record<number, StudentBooking[]>>({});
+  const [studentEnrollments, setStudentEnrollments] = useState<Record<number, StudentEnrollment[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -109,18 +118,18 @@ function StudentsContent() {
           setUsers([]);
         }
 
-        // Fetch bookings for each student
-        const bookingsData: Record<number, StudentBooking[]> = {};
+        // Fetch enrollments for each student
+        const enrollmentsData: Record<number, StudentEnrollment[]> = {};
         for (const student of studentsData) {
           try {
-            const bookings = await apiClient.get<StudentBooking[]>(`/api/students/${student.id}/bookings`);
-            bookingsData[student.id] = bookings;
-          } catch (bookingError: any) {
-            console.log(`Could not fetch bookings for student ${student.id}:`, bookingError.message);
-            bookingsData[student.id] = [];
+            const enrollments = await apiClient.get<StudentEnrollment[]>(`/api/students/${student.id}/enrollments`);
+            enrollmentsData[student.id] = enrollments;
+          } catch (enrollmentError: any) {
+            console.log(`Could not fetch enrollments for student ${student.id}:`, enrollmentError.message);
+            enrollmentsData[student.id] = [];
           }
         }
-        setStudentBookings(bookingsData);
+        setStudentEnrollments(enrollmentsData);
       } catch (err: any) {
         setError(err.message || "Error fetching data");
       } finally {
@@ -222,7 +231,7 @@ function StudentsContent() {
   };
 
   const getStudentClasses = (studentId: number) => {
-    return studentBookings[studentId] || [];
+    return studentEnrollments[studentId] || [];
   };
 
   return (
@@ -433,11 +442,23 @@ function StudentsContent() {
                     </div>
                     {getStudentClasses(student.id).length > 0 ? (
                       <div className="space-y-2">
-                        {getStudentClasses(student.id).slice(0, 3).map((booking) => (
-                          <div key={booking.id} className="text-xs bg-blue-50 p-2 rounded">
-                            <div className="font-medium text-blue-900">{booking.className}</div>
+                        {getStudentClasses(student.id).slice(0, 3).map((enrollment) => (
+                          <div key={enrollment.id} className="text-xs bg-blue-50 p-2 rounded">
+                            <div className="flex justify-between items-start">
+                              <div className="font-medium text-blue-900">{enrollment.className}</div>
+                              <Badge
+                                variant={enrollment.status === 'enrolled' ? 'default' :
+                                  enrollment.status === 'waitlisted' ? 'secondary' : 'destructive'}
+                                className="text-xs"
+                              >
+                                {enrollment.status}
+                              </Badge>
+                            </div>
                             <div className="text-blue-700">
-                              {formatDay(booking.dayOfWeek)} • {formatTime(booking.startTime)}-{formatTime(booking.endTime)}
+                              {formatDay(enrollment.dayOfWeek)} • {formatTime(enrollment.startTime)}-{formatTime(enrollment.endTime)}
+                            </div>
+                            <div className="text-blue-600 text-xs mt-1">
+                              Attendance: {enrollment.attendanceCount}/{enrollment.totalSessions}
                             </div>
                           </div>
                         ))}
